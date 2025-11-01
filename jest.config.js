@@ -3,7 +3,9 @@ export default {
   transform: {},
   moduleFileExtensions: ["js"],
   testMatch: ["**/tests/**/*.test.js"],
-  setupFilesAfterEnv: ["<rootDir>/tests/setup/testSetup.js"],
+  globals: {
+    jest: true,
+  },
   collectCoverageFrom: [
     "controllers/**/*.js",
     "routes/**/*.js",

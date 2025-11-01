@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import { authenticate, isAdmin } from "../../../middleware/authMiddleware.js";
 import { createTestUser, createTestAdmin } from "../../helpers/testHelpers.js";
 import "../../setup/testSetup.js";
@@ -10,7 +11,7 @@ describe("Auth Middleware Tests", () => {
       headers: {},
     };
     res = {
-      status: jest.fn().mockReturnThis(),
+      status: jest.fn(() => res),
       json: jest.fn(),
     };
     next = jest.fn();

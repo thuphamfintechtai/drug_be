@@ -124,15 +124,15 @@ describe("Registration Request API Tests", () => {
     test("Admin lấy chi tiết registration request thành công", async () => {
       const admin = await createTestAdmin();
       const user = await createTestUser({ role: "pharma_company" });
-      const request = await createTestRegistrationRequest(user);
+      const registrationRequest = await createTestRegistrationRequest(user);
 
       const response = await request(app)
-        .get(`/api/auth/registration-requests/${request._id}`)
+        .get(`/api/auth/registration-requests/${registrationRequest._id}`)
         .set("Authorization", getAuthHeader(admin));
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data._id.toString()).toBe(request._id.toString());
+      expect(response.body.data._id.toString()).toBe(registrationRequest._id.toString());
     });
   });
 
@@ -143,10 +143,10 @@ describe("Registration Request API Tests", () => {
         role: "pharma_company",
         walletAddress: "0x1234567890123456789012345678901234567890",
       });
-      const request = await createTestRegistrationRequest(user);
+      const registrationRequest = await createTestRegistrationRequest(user);
 
       const response = await request(app)
-        .post(`/api/auth/registration-requests/${request._id}/approve`)
+        .post(`/api/auth/registration-requests/${registrationRequest._id}/approve`)
         .set("Authorization", getAuthHeader(admin));
 
       expect(response.status).toBe(200);
@@ -156,10 +156,10 @@ describe("Registration Request API Tests", () => {
     test("Approve request đã được xử lý sẽ fail", async () => {
       const admin = await createTestAdmin();
       const user = await createTestUser({ role: "pharma_company" });
-      const request = await createTestRegistrationRequest(user, { status: "approved" });
+      const registrationRequest = await createTestRegistrationRequest(user, { status: "approved" });
 
       const response = await request(app)
-        .post(`/api/auth/registration-requests/${request._id}/approve`)
+        .post(`/api/auth/registration-requests/${registrationRequest._id}/approve`)
         .set("Authorization", getAuthHeader(admin));
 
       expect(response.status).toBe(400);
@@ -170,10 +170,10 @@ describe("Registration Request API Tests", () => {
     test("Admin reject registration request thành công", async () => {
       const admin = await createTestAdmin();
       const user = await createTestUser({ role: "pharma_company" });
-      const request = await createTestRegistrationRequest(user);
+      const registrationRequest = await createTestRegistrationRequest(user);
 
       const response = await request(app)
-        .post(`/api/auth/registration-requests/${request._id}/reject`)
+        .post(`/api/auth/registration-requests/${registrationRequest._id}/reject`)
         .set("Authorization", getAuthHeader(admin))
         .send({
           rejectionReason: "Thông tin không đầy đủ",
@@ -182,7 +182,7 @@ describe("Registration Request API Tests", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
 
-      const updatedRequest = await RegistrationRequest.findById(request._id);
+      const updatedRequest = await RegistrationRequest.findById(registrationRequest._id);
       expect(updatedRequest.status).toBe("rejected");
     });
   });
