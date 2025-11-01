@@ -9,8 +9,10 @@ import {
   searchDrugByATCCode,
   
   // Quản lý sản xuất và phân phối
-  packageDrug,
+  uploadDrugPackageToIPFS,
+  saveMintedNFTs,
   transferToDistributor,
+  saveTransferTransaction,
   getProductionHistory,
   getTransferHistory,
   getStatistics,
@@ -41,8 +43,14 @@ router.put("/drugs/:drugId", updateDrug);
 router.delete("/drugs/:drugId", deleteDrug);
 
 // ============ QUẢN LÝ SẢN XUẤT VÀ PHÂN PHỐI ============
-router.post("/production/package", packageDrug);
+// Bước 1: Upload folder lên IPFS
+router.post("/production/upload-ipfs", uploadDrugPackageToIPFS);
+// Bước 2: Lưu NFT vào DB sau khi mint thành công (FE đã gọi smart contract)
+router.post("/production/save-minted", saveMintedNFTs);
+// Chuyển giao: Bước 1 - Lưu invoice với status pending
 router.post("/production/transfer", transferToDistributor);
+// Chuyển giao: Bước 2 - Lưu transactionHash sau khi FE gọi smart contract thành công
+router.post("/production/save-transfer", saveTransferTransaction);
 router.get("/production/history", getProductionHistory);
 router.get("/transfer/history", getTransferHistory);
 router.get("/statistics", getStatistics);
