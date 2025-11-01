@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 dotenv.config({ path: ".env.test" });
 
-const TEST_MONGODB_URI = process.env.TEST_MONGODB_URI || process.env.MONGODB_URI?.replace("/drug_be", "/drug_be_test") || "mongodb://localhost:27017/drug_be_test";
+const TEST_MONGODB_URI = process.env.TEST_MONGODB_URI || process.env.MONGODB_URI || "mongodb://localhost:27017/drug_be";
 
 beforeAll(async () => {
   if (mongoose.connection.readyState === 0) {
