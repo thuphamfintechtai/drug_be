@@ -9,17 +9,15 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load deployed addresses
 const deployedAddressesPath = path.join(__dirname, "..", "deployed_addresses.json");
 const accessControlABIPath = path.join(__dirname, "..", "DeployModule#accessControlService.json");
 
 const deployedAddresses = JSON.parse(fs.readFileSync(deployedAddressesPath, "utf8"));
 const accessControlABI = JSON.parse(fs.readFileSync(accessControlABIPath, "utf8")).abi;
 
-// Get contract address
 const accessControlAddress = deployedAddresses["DeployModule#accessControlService"];
-const RPC_URL = process.env.RPC_URL || "http://localhost:8545"; // Default to local node
-const PRIVATE_KEY = process.env.PRIVATE_KEY; // Private key của admin để ký giao dịch
+const RPC_URL = process.env.RPC_URL || "http://localhost:8545";
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 if (!PRIVATE_KEY) {
   console.warn("PRIVATE_KEY không được thiết lập trong environment variables");
@@ -29,7 +27,6 @@ let provider;
 let signer;
 let accessControlContract;
 
-// Initialize blockchain connection
 export const initializeBlockchain = () => {
   try {
     provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -56,7 +53,6 @@ export const initializeBlockchain = () => {
   }
 };
 
-// Add Manufacturer to blockchain
 export const addManufacturerToBlockchain = async (walletAddress, taxCode, licenseNo) => {
   try {
     if (!accessControlContract) {
@@ -79,7 +75,6 @@ export const addManufacturerToBlockchain = async (walletAddress, taxCode, licens
 
     console.log("Transaction đã được gửi:", tx.hash);
     
-    // Đợi transaction được confirm
     const receipt = await tx.wait();
     console.log("Transaction đã được confirm:", receipt.blockNumber);
 
@@ -95,7 +90,6 @@ export const addManufacturerToBlockchain = async (walletAddress, taxCode, licens
   }
 };
 
-// Add Distributor to blockchain
 export const addDistributorToBlockchain = async (walletAddress, taxCode, licenseNo) => {
   try {
     if (!accessControlContract) {
@@ -118,7 +112,6 @@ export const addDistributorToBlockchain = async (walletAddress, taxCode, license
 
     console.log("Transaction đã được gửi:", tx.hash);
     
-    // Đợi transaction được confirm
     const receipt = await tx.wait();
     console.log("Transaction đã được confirm:", receipt.blockNumber);
 
@@ -134,7 +127,6 @@ export const addDistributorToBlockchain = async (walletAddress, taxCode, license
   }
 };
 
-// Add Pharmacy to blockchain
 export const addPharmacyToBlockchain = async (walletAddress, taxCode, licenseNo) => {
   try {
     if (!accessControlContract) {
@@ -157,7 +149,6 @@ export const addPharmacyToBlockchain = async (walletAddress, taxCode, licenseNo)
 
     console.log("Transaction đã được gửi:", tx.hash);
     
-    // Đợi transaction được confirm
     const receipt = await tx.wait();
     console.log("Transaction đã được confirm:", receipt.blockNumber);
 
@@ -173,7 +164,6 @@ export const addPharmacyToBlockchain = async (walletAddress, taxCode, licenseNo)
   }
 };
 
-// Check if address is a manufacturer
 export const checkIsManufacturer = async (walletAddress) => {
   try {
     if (!accessControlContract) {
@@ -188,7 +178,6 @@ export const checkIsManufacturer = async (walletAddress) => {
   }
 };
 
-// Check if address is a distributor
 export const checkIsDistributor = async (walletAddress) => {
   try {
     if (!accessControlContract) {
@@ -203,7 +192,6 @@ export const checkIsDistributor = async (walletAddress) => {
   }
 };
 
-// Check if address is a pharmacy
 export const checkIsPharmacy = async (walletAddress) => {
   try {
     if (!accessControlContract) {
@@ -218,6 +206,5 @@ export const checkIsPharmacy = async (walletAddress) => {
   }
 };
 
-// Initialize on module load
 initializeBlockchain();
 
