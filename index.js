@@ -1,7 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import registrationRoutes from "./routes/registrationRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 
 dotenv.config();
 
@@ -9,25 +9,20 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/drug_be";
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
-app.use("/api/registration", registrationRoutes);
+app.use("/api/auth", authRoutes);
 
-// Health check
 app.get("/", (req, res) => {
   res.json({ message: "Drug Traceability Backend API" });
 });
 
-// Connect to MongoDB
 mongoose
   .connect(MONGODB_URI)
   .then(() => {
     console.log("Đã kết nối MongoDB thành công");
     
-    // Start server
     app.listen(PORT, () => {
       console.log(`Server đang chạy trên port ${PORT}`);
     });
@@ -37,7 +32,6 @@ mongoose
     process.exit(1);
   });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error("Lỗi:", err);
   res.status(500).json({
