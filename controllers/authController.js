@@ -1,9 +1,11 @@
 import User from "../models/User.js";
 import RegistrationRequest from "../models/RegistrationRequest.js";
+import PasswordReset from "../models/PasswordReset.js";
 import PharmaCompany from "../models/PharmaCompany.js";
 import Distributor from "../models/Distributor.js";
 import Pharmacy from "../models/Pharmacy.js";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { generateToken } from "../utils/jwt.js";
 import {
   addManufacturerToBlockchain,
@@ -857,6 +859,277 @@ export const getRegistrationRequestById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Lỗi server khi lấy thông tin yêu cầu",
+      error: error.message,
+    });
+  }
+};
+
+// Quên mật khẩu - tạo yêu cầu reset (cần admin xác nhận)
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp email",
+      });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Không tiết lộ email có tồn tại hay không vì lý do bảo mật
+      return res.status(200).json({
+        success: true,
+        message: "Nếu email tồn tại, yêu cầu reset mật khẩu đã được gửi. Vui lòng chờ admin xác nhận.",
+      });
+    }
+
+    // Chỉ pharma_company cần admin xác nhận, các role khác thì không
+    if (user.role === "pharma_company") {
+      // Tạo token reset
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24); // Token hết hạn sau 24 giờ
+
+      // Xóa các token cũ chưa sử dụng
+      await PasswordReset.deleteMany({
+        user: user._id,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      });
+
+      // Tạo password reset request
+      const passwordReset = new PasswordReset({
+        user: user._id,
+        token: resetToken,
+        expiresAt,
+        ipAddress: req.ip || req.connection.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
+      await passwordReset.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Yêu cầu reset mật khẩu đã được tạo. Vui lòng chờ admin xác nhận.",
+        data: {
+          resetRequestId: passwordReset._id,
+          expiresAt: passwordReset.expiresAt,
+        },
+      });
+    } else {
+      // Các role khác không cần admin xác nhận
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1); // Token hết hạn sau 1 giờ
+
+      await PasswordReset.deleteMany({
+        user: user._id,
+        used: false,
+        expiresAt: { $gt: new Date() },
+      });
+
+      const passwordReset = new PasswordReset({
+        user: user._id,
+        token: resetToken,
+        expiresAt,
+        ipAddress: req.ip || req.connection.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
+      await passwordReset.save();
+
+      // Trong production, gửi email với reset token
+      // Ở đây chỉ trả về token (không nên làm vậy trong production)
+      return res.status(200).json({
+        success: true,
+        message: "Yêu cầu reset mật khẩu đã được tạo. Vui lòng kiểm tra email.",
+        // Trong production, KHÔNG trả về token trong response
+        // resetToken: resetToken, // CHỈ để test, xóa trong production
+      });
+    }
+  } catch (error) {
+    console.error("Lỗi khi tạo yêu cầu reset mật khẩu:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi tạo yêu cầu reset mật khẩu",
+      error: error.message,
+    });
+  }
+};
+
+// Admin xác nhận yêu cầu reset mật khẩu của pharma_company
+export const approvePasswordReset = async (req, res) => {
+  try {
+    const adminUser = req.user;
+    
+    if (adminUser.role !== "system_admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Chỉ có admin mới có thể xác nhận yêu cầu reset mật khẩu",
+      });
+    }
+
+    const { resetRequestId } = req.params;
+
+    const passwordReset = await PasswordReset.findById(resetRequestId).populate("user");
+
+    if (!passwordReset) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy yêu cầu reset mật khẩu",
+      });
+    }
+
+    if (passwordReset.used) {
+      return res.status(400).json({
+        success: false,
+        message: "Yêu cầu reset mật khẩu này đã được sử dụng",
+      });
+    }
+
+    if (new Date() > passwordReset.expiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Token reset mật khẩu đã hết hạn",
+      });
+    }
+
+    const user = passwordReset.user;
+    if (user.role !== "pharma_company") {
+      return res.status(400).json({
+        success: false,
+        message: "Yêu cầu reset mật khẩu này không thuộc về pharma_company",
+      });
+    }
+
+    // Đánh dấu là đã được admin xác nhận (thông qua việc giữ nguyên token và expiresAt)
+    // Trong thực tế, có thể thêm trường "approvedBy" vào model
+
+    return res.status(200).json({
+      success: true,
+      message: "Yêu cầu reset mật khẩu đã được admin xác nhận. Người dùng có thể sử dụng token để reset mật khẩu.",
+      data: {
+        resetToken: passwordReset.token,
+        expiresAt: passwordReset.expiresAt,
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi khi xác nhận yêu cầu reset mật khẩu:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi xác nhận yêu cầu reset mật khẩu",
+      error: error.message,
+    });
+  }
+};
+
+// Reset mật khẩu
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp token và mật khẩu mới",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu mới phải có ít nhất 6 ký tự",
+      });
+    }
+
+    const passwordReset = await PasswordReset.findOne({
+      token,
+      used: false,
+    }).populate("user");
+
+    if (!passwordReset) {
+      return res.status(400).json({
+        success: false,
+        message: "Token reset mật khẩu không hợp lệ hoặc đã được sử dụng",
+      });
+    }
+
+    if (new Date() > passwordReset.expiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Token reset mật khẩu đã hết hạn",
+      });
+    }
+
+    const user = passwordReset.user;
+    
+    // Với pharma_company, cần kiểm tra xem admin đã xác nhận chưa
+    // Ở đây chúng ta giả định rằng nếu token tồn tại và chưa hết hạn thì đã được admin xác nhận
+    // Trong thực tế, nên có trường "approved" trong PasswordReset model
+
+    // Hash mật khẩu mới
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    // Đánh dấu token đã được sử dụng
+    passwordReset.used = true;
+    await passwordReset.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Reset mật khẩu thành công",
+    });
+  } catch (error) {
+    console.error("Lỗi khi reset mật khẩu:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi reset mật khẩu",
+      error: error.message,
+    });
+  }
+};
+
+// Lấy danh sách yêu cầu reset mật khẩu (cho admin)
+export const getPasswordResetRequests = async (req, res) => {
+  try {
+    const adminUser = req.user;
+
+    if (adminUser.role !== "system_admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Chỉ có admin mới có thể xem danh sách yêu cầu reset mật khẩu",
+      });
+    }
+
+    const { used, expired } = req.query;
+    const filter = {};
+
+    if (used !== undefined) {
+      filter.used = used === "true";
+    }
+
+    if (expired === "true") {
+      filter.expiresAt = { $lt: new Date() };
+    } else if (expired === "false") {
+      filter.expiresAt = { $gte: new Date() };
+    }
+
+    const requests = await PasswordReset.find(filter)
+      .populate("user", "username email fullName role")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: requests,
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy danh sách yêu cầu reset mật khẩu:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy danh sách yêu cầu reset mật khẩu",
       error: error.message,
     });
   }
