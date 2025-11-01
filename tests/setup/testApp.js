@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import authRoutes from "../../routes/authRoutes.js";
 import userRoutes from "../../routes/userRoutes.js";
 
+dotenv.config();
 dotenv.config({ path: ".env.test" });
 
 const app = express();
