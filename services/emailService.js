@@ -207,3 +207,84 @@ export const sendPasswordResetApprovedEmail = async (email, resetToken, resetUrl
   }
 };
 
+// Gửi email mật khẩu mới (sau khi admin duyệt yêu cầu reset)
+export const sendNewPasswordEmail = async (toEmail, newPassword, username) => {
+  try {
+    const transporter = createTransporter();
+
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.warn("SMTP không được cấu hình. Không thể gửi email.");
+      console.log("Mật khẩu mới (chỉ để test):", newPassword);
+      return { success: false, message: "SMTP chưa được cấu hình" };
+    }
+
+    const mailOptions = {
+      from: `"Drug Traceability System" <${process.env.SMTP_USER}>`,
+      to: toEmail,
+      subject: "Mật khẩu mới của bạn cho hệ thống Drug Traceability",
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color:rgb(76, 91, 175); color: white; padding: 20px; text-align: center; }
+            .content { padding: 20px; background-color: #f9f9f9; }
+            .password-box { font-size: 20px; font-weight: bold; text-align: center; background-color: #e9ecef; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            .footer { padding: 20px; text-align: center; color: #666; font-size: 12px; }
+            .warning { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>Mật khẩu mới của bạn</h2>
+          </div>
+          <div class="content">
+            <p>Xin chào ${username || toEmail},</p>
+            <p>Yêu cầu đặt lại mật khẩu của bạn đã được quản trị viên phê duyệt. Đây là mật khẩu mới của bạn:</p>
+            <div class="password-box">${newPassword}</div>
+            <div class="warning">
+              <strong>Lưu ý quan trọng:</strong>
+              <ul>
+                <li>Vui lòng đăng nhập bằng mật khẩu này và đổi mật khẩu ngay lập tức để đảm bảo an toàn cho tài khoản của bạn</li>
+                <li>Không chia sẻ mật khẩu này với bất kỳ ai</li>
+                <li>Nếu bạn không yêu cầu thay đổi mật khẩu này, vui lòng liên hệ với quản trị viên hệ thống ngay lập tức</li>
+              </ul>
+            </div>
+            <p>Trân trọng,<br>Đội ngũ Drug Traceability System</p>
+          </div>
+          <div class="footer">
+            <p>Đây là email tự động, vui lòng không trả lời.</p>
+            <p>&copy; ${new Date().getFullYear()} Drug Traceability System</p>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `
+        Mật khẩu mới của bạn
+        
+        Xin chào ${username || toEmail},
+        
+        Yêu cầu đặt lại mật khẩu của bạn đã được quản trị viên phê duyệt. Đây là mật khẩu mới của bạn:
+        
+        ${newPassword}
+        
+        Vui lòng đăng nhập bằng mật khẩu này và đổi mật khẩu ngay lập tức để đảm bảo an toàn cho tài khoản của bạn.
+        
+        Nếu bạn không yêu cầu thay đổi mật khẩu này, vui lòng liên hệ với quản trị viên hệ thống ngay lập tức.
+        
+        Trân trọng,
+        Đội ngũ Drug Traceability System
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Email mật khẩu mới đã được gửi:", info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("Lỗi khi gửi email mật khẩu mới:", error);
+    throw error;
+  }
+};
+
