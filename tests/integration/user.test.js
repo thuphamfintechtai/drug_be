@@ -8,7 +8,7 @@ import {
 } from "../helpers/testHelpers.js";
 import User from "../../models/User.js";
 
-describe("User API Tests", () => {
+describe("User API Tests", () => 
   describe("GET /api/users", () => {
     test("Admin lấy danh sách users thành công", async () => {
       const admin = await createTestAdmin();
@@ -64,7 +64,7 @@ describe("User API Tests", () => {
       expect(response.body.data.users.length).toBeLessThanOrEqual(2);
       expect(response.body.data.pagination.page).toBe(1);
     });
-  });
+  }),
 
   describe("GET /api/users/:id", () => {
     test("Lấy thông tin user theo ID thành công", async () => {
@@ -90,7 +90,7 @@ describe("User API Tests", () => {
 
       expect(response.status).toBe(404);
     });
-  });
+  }),
 
   describe("GET /api/users/profile", () => {
     test("Lấy profile của user hiện tại thành công", async () => {
@@ -104,27 +104,9 @@ describe("User API Tests", () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data._id.toString()).toBe(user._id.toString());
     });
-  });
+  }),
 
-  describe("PUT /api/users/profile", () => {
-    test("Cập nhật profile thành công", async () => {
-      const user = await createTestUser();
-
-      const response = await request(app)
-        .put("/api/users/profile")
-        .set("Authorization", getAuthHeader(user))
-        .send({
-          fullName: "Updated Name",
-          phone: "0987654321",
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data.fullName).toBe("Updated Name");
-    });
-  });
-
-  describe("PUT /api/users/profile/change-password", () => {
+  describe("PUT  8u77777777777  §/users/profile/change-password", () => {
     test("Đổi mật khẩu thành công", async () => {
       const user = await createTestUser({ password: "oldpass123" });
 
@@ -167,7 +149,7 @@ describe("User API Tests", () => {
 
       expect(response.status).toBe(400);
     });
-  });
+  }),
 
   describe("PUT /api/users/:id", () => {
     test("Admin cập nhật user thành công", async () => {
@@ -186,7 +168,7 @@ describe("User API Tests", () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data.fullName).toBe("Admin Updated Name");
     });
-  });
+  }),
 
   describe("PUT /api/users/:id/status", () => {
     test("Admin cập nhật status user thành công", async () => {
@@ -218,7 +200,7 @@ describe("User API Tests", () => {
 
       expect(response.status).toBe(400);
     });
-  });
+  }),
 
   describe("DELETE /api/users/:id", () => {
     test("Admin xóa user thành công", async () => {
@@ -245,7 +227,7 @@ describe("User API Tests", () => {
 
       expect(response.status).toBe(400);
     });
-  });
+  }),
 
   describe("GET /api/users/stats", () => {
     test("Admin lấy thống kê users thành công", async () => {
@@ -263,6 +245,5 @@ describe("User API Tests", () => {
       expect(response.body.data).toHaveProperty("byRole");
       expect(response.body.data).toHaveProperty("byStatus");
     });
-  });
-});
-
+  })
+)

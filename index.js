@@ -4,12 +4,13 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import pharmaCompanyRoutes from "./routes/pharmaCompanyRoutes.js";
+import distributorRoutes from "./routes/distributorRoutes.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/drug_be";
+const MONGODB_URI = process.env.MONGODB_URI;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -17,6 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/pharma-company", pharmaCompanyRoutes);
+app.use("/api/distributor", distributorRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Drug Traceability Backend API" });

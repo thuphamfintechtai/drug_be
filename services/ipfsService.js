@@ -1,6 +1,3 @@
-// Node.js 18+ có sẵn FormData và fetch
-// Nếu dùng Node.js < 18, cần: npm install form-data và node-fetch
-
 const PINATA_API_KEY = process.env.PINATA_API_KEY;
 const PINATA_SECRET_KEY = process.env.PINATA_SECRET_KEY;
 const PINATA_BASE_URL = "https://api.pinata.cloud";
@@ -17,11 +14,8 @@ export const uploadFolderToIPFS = async (quantity, metadata) => {
       throw new Error("Quantity phải lớn hơn 0");
     }
 
-    // Tạo form data với các file metadata
     const formData = new FormData();
     
-    // Tạo folder structure
-    // Với mỗi NFT, tạo một file JSON metadata
     for (let i = 1; i <= quantity; i++) {
       const nftMetadata = {
         name: metadata?.name || `NFT #${i}`,
@@ -33,7 +27,6 @@ export const uploadFolderToIPFS = async (quantity, metadata) => {
         range: { from: 1, to: quantity },
       };
 
-      // Tạo Blob từ metadata JSON (Node.js 18+ FormData hỗ trợ Blob)
       const metadataBlob = new Blob([JSON.stringify(nftMetadata, null, 2)], {
         type: "application/json",
       });
@@ -48,7 +41,6 @@ export const uploadFolderToIPFS = async (quantity, metadata) => {
       headers: {
         pinata_api_key: PINATA_API_KEY,
         pinata_secret_api_key: PINATA_SECRET_KEY,
-        // Không set Content-Type, để FormData tự động set với boundary
       },
       body: formData,
     });
@@ -66,7 +58,6 @@ export const uploadFolderToIPFS = async (quantity, metadata) => {
       pinSize: result.PinSize,
       timestamp: result.Timestamp,
       ipfsUrl: `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`,
-      // Trả về thông tin về range token IDs sẽ được mint (từ 1 đến quantity)
       amount: quantity,
       range: {
         from: 1,
@@ -95,7 +86,6 @@ export const uploadFileToIPFS = async (fileBuffer, fileName, contentType = "appl
       headers: {
         pinata_api_key: PINATA_API_KEY,
         pinata_secret_api_key: PINATA_SECRET_KEY,
-        // Không set Content-Type, để FormData tự động set với boundary
       },
       body: formData,
     });

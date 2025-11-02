@@ -139,7 +139,7 @@ const ManufacturerInvoiceSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["draft", "issued", "sent", "paid", "cancelled"],
+      enum: ["draft", "pending", "issued", "sent", "paid", "cancelled"],
       default: "draft",
     },
     chainTxHash: {
