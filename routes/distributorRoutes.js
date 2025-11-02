@@ -1,6 +1,5 @@
 import express from "express";
 import {
-  // Quản lý đơn hàng từ pharma company
   getInvoicesFromManufacturer,
   confirmReceipt,
   transferToPharmacy,
