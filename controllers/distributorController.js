@@ -73,6 +73,86 @@ export const getInvoicesFromManufacturer = async (req, res) => {
   }
 };
 
+
+// Lấy chi tiết invoice với tokenIds
+export const getInvoiceDetail = async (req, res) => {
+  try {
+    const user = req.user;
+    const { invoiceId } = req.params;
+
+    if (user.role !== "distributor") {
+      return res.status(403).json({
+        success: false,
+        message: "Chỉ có distributor mới có thể xem chi tiết invoice",
+      });
+    }
+
+    // Tìm invoice
+    const invoice = await ManufacturerInvoice.findById(invoiceId)
+      .populate("fromManufacturer", "username email fullName walletAddress")
+      .populate("toDistributor", "username email fullName walletAddress")
+      .populate("proofOfProduction");
+
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy invoice",
+      });
+    }
+
+    // Kiểm tra invoice thuộc về distributor này
+    const toDistributorId = invoice.toDistributor._id || invoice.toDistributor;
+    if (toDistributorId.toString() !== user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền xem invoice này",
+      });
+    }
+
+    // Lấy tokenIds từ NFTInfo
+    // Cách 1: Lấy từ NFT có chainTxHash = invoice.chainTxHash (nếu invoice đã sent)
+    // Cách 2: Lấy từ NFT có owner = distributor và proofOfProduction = invoice.proofOfProduction
+    let tokenIds = [];
+    
+    if (invoice.chainTxHash) {
+      // Nếu invoice đã có chainTxHash, lấy NFT theo chainTxHash
+      const nfts = await NFTInfo.find({
+        chainTxHash: invoice.chainTxHash,
+        owner: user._id,
+      }).select("tokenId");
+      tokenIds = nfts.map(nft => nft.tokenId);
+    }
+    
+    // Nếu chưa có tokenIds và có proofOfProduction, lấy từ proofOfProduction
+    if (tokenIds.length === 0 && invoice.proofOfProduction) {
+      const nfts = await NFTInfo.find({
+        proofOfProduction: invoice.proofOfProduction._id || invoice.proofOfProduction,
+        owner: user._id,
+        status: { $in: ["transferred", "minted"] },
+      }).select("tokenId");
+      tokenIds = nfts.map(nft => nft.tokenId);
+    }
+
+    // Trả về invoice với tokenIds
+    const invoiceObj = invoice.toObject();
+    invoiceObj.tokenIds = tokenIds;
+
+    console.log("[getInvoiceDetail] invoiceId=", invoiceId, "tokenIds found=", tokenIds.length);
+
+    return res.status(200).json({
+      success: true,
+      data: invoiceObj,
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy chi tiết invoice:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy chi tiết invoice",
+      error: error.message,
+    });
+  }
+};
+
 // Xác nhận nhận hàng từ pharma company (Bước 1 và 2)
 // Bước 1: Distributor xác nhận đã nhận hàng
 // Bước 2: Lưu vào database với trạng thái "Đang chờ Manufacture xác nhận"

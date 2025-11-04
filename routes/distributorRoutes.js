@@ -12,6 +12,7 @@ import {
   searchDrugByATCCode,
   getDistributorInfo,
   getPharmacies,
+  getInvoiceDetail,
 } from "../controllers/distributorController.js";
 import { authenticate, authorize } from "../middleware/authMiddleware.js";
 
@@ -26,6 +27,7 @@ router.use(isDistributor);
 
 // ============ QUẢN LÝ ĐƠN HÀNG TỪ PHARMA COMPANY ============
 router.get("/invoices", getInvoicesFromManufacturer);
+router.get("/invoices/:invoiceId/detail", getInvoiceDetail);
 router.post("/invoices/confirm-receipt", confirmReceipt);
 
 // ============ CHUYỂN TIẾP CHO PHARMACY ============
