@@ -295,8 +295,8 @@ export const getDrugDetails = async (req, res) => {
 
     // Lấy thông tin NFTs liên quan
     const nfts = await NFTInfo.find({ drug: drugId })
-      .select("tokenId status currentOwner createdAt mintTxHash")
-      .populate("currentOwner", "username email fullName role");
+      .select("tokenId serialNumber batchNumber status owner createdAt chainTxHash mfgDate expDate quantity unit")
+      .populate("owner", "username email fullName role");
 
     // Lấy lịch sử sản xuất
     const productionHistory = await ProofOfProduction.find({ drug: drugId })
