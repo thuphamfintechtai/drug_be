@@ -8,6 +8,7 @@ import {
   getDrugs,
   searchDrugByATCCode,
   getPharmacyProfile,
+  pharmaChartOneWeek
 } from "../controllers/pharmacyController.js";
 import { authenticate, authorize } from "../middleware/authMiddleware.js";
 
@@ -28,6 +29,8 @@ router.post("/invoices/confirm-receipt", confirmReceipt);
 router.get("/distribution/history", getDistributionHistory);
 router.get("/statistics", getStatistics);
 router.get("/track/:tokenId", trackDrugByNFTId);
+
+router.get("/get-one-week-pharma" , pharmaChartOneWeek)
 
 // ============ QUẢN LÝ THUỐC ============
 router.get("/drugs", getDrugs);

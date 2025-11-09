@@ -4,6 +4,8 @@ import DrugInfo from "../models/DrugInfo.js";
 import NFTInfo from "../models/NFTInfo.js";
 import User from "../models/User.js";
 import { getTrackingHistory } from "../services/blockchainService.js";
+import Pharmacy from "../models/Pharmacy.js";
+import ProofOfDistribution from "../models/ProofOfDistribution.js";
 
 // ============ QUẢN LÝ ĐƠN HÀNG TỪ DISTRIBUTOR ============
 
@@ -695,3 +697,124 @@ export const getPharmacyProfile = async (req, res) => {
   }
 };
 
+
+
+// Pharma Chart
+
+export const pharmaChartOneWeek = async (req , res) => {
+  try {
+    const user = req.user;
+    // Tìm PharmaCompany theo user
+    const Pharmacy = await Pharmacy.findOne({ user: user._id });
+    if (!Pharmacy) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy pharma",
+        error: "Pharma not found",
+      });
+    }
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const Distributions = await ProofOfDistribution.find({
+      toDistributor: Pharmacy._id,
+      createdAt: { $gte: sevenDaysAgo },
+      status : "confirmed"
+    })
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        Distributions,
+        count: Distributions.length,
+        from: sevenDaysAgo,
+        to: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy biểu đồ 1 tuần Distributor:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy dữ liệu biểu đồ 1 tuần",
+      error: error.message,
+    });
+  }
+}
+
+
+// So Sánh ngày hnay và ngày hqua trên lệch bao nhiêu 
+
+export const pharmaChartTodayYesterday = async (req , res) => {
+  try {
+    const user = req.user;
+    // Tìm PharmaCompany theo user
+    const Pharma = await Pharmacy.findOne({ user: user._id });
+    if (!Pharma) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy Pharma",
+        error: "Pharma not found",
+      });
+    }
+    // Tính đúng khoảng thời gian (bắt đầu của hôm nay và hôm trước) theo timezone server
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+    // Đếm số production của hôm qua (từ startOfYesterday đến trước startOfToday)
+    const yesterdayCount = await ProofOfProduction.countDocuments({
+      manufacturer: pharmaCompany._id,
+      createdAt: { $gte: startOfYesterday, $lt: startOfToday },
+    });
+
+    // Đếm số production của hôm nay (từ startOfToday trở đi)
+    const todayCount = await ProofOfProduction.countDocuments({
+      manufacturer: pharmaCompany._id,
+      createdAt: { $gte: startOfToday },
+    });
+
+    // Tính chênh lệch và phần trăm thay đổi
+    const diff = todayCount - yesterdayCount;
+    let percentChange = null;
+    if (yesterdayCount === 0) {
+      percentChange = todayCount === 0 ? 0 : 100; 
+    } else {
+      percentChange = (diff / yesterdayCount) * 100;
+    }
+
+    const todayProductions = await ProofOfProduction.find({
+      manufacturer: pharmaCompany._id,
+      createdAt: { $gte: startOfToday },
+    })
+      .populate("drug", "tradeName atcCode")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        todayCount,
+        yesterdayCount,
+        diff,
+        percentChange,
+        todayProductionsCount: todayProductions.length,
+        todayProductions: todayProductions,
+        period: {
+          yesterdayFrom: startOfYesterday,
+          yesterdayTo: new Date(startOfToday.getTime() - 1),
+          todayFrom: startOfToday,
+          now: new Date(),
+        },
+      },
+    });
+
+  } catch (error) {
+    console.error("Lỗi khi lấy biểu đồ 1 tuần pharma company:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy dữ liệu biểu đồ 1 tuần",
+      error: error.message,
+    });
+  }
+}

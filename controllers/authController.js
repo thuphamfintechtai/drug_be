@@ -91,6 +91,7 @@ export const login = async (req, res) => {
           licenseNo: businessProfile.licenseNo,
           taxCode: businessProfile.taxCode,
           status: businessProfile.status,
+          walletAddress : user.walletAddress
         } : null,
         token,
       },

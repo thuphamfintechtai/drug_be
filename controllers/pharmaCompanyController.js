@@ -587,7 +587,8 @@ export const saveMintedNFTs = async (req, res) => {
         const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrTargetUrl)}`;
 
         console.log("Target URL for tokenId :" + tokenIds[i] + " " + " : " + qrTargetUrl)
-        console.log(`QR Image URL for token Id ${tokenIds[i]}` + qrImageUrl);
+        console.log('\n')
+        console.log(`QR Image URL for token Id ${tokenIds[i]} : ` + qrImageUrl);
     }
     
     return res.status(201).json({
@@ -1799,6 +1800,333 @@ export const approveDistribution = async (req, res) => {
       success: false,
       message: "Lỗi server khi xác nhận quyền NFT",
       error: error.message,
+    });
+  }
+};
+
+
+
+// Pharma company Chart
+
+export const pharmaCompanyChart1Week = async (req , res) => {
+  try {
+    const user = req.user;
+    // Tìm PharmaCompany theo user
+    const pharmaCompany = await PharmaCompany.findOne({ user: user._id });
+    if (!pharmaCompany) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy pharma company",
+        error: "PharmaCompany not found",
+      });
+    }
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const productions = await ProofOfProduction.find({
+      manufacturer: pharmaCompany._id,
+      createdAt: { $gte: sevenDaysAgo },
+    })
+      .populate("drug", "tradeName atcCode")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        productions,
+        count: productions.length,
+        from: sevenDaysAgo,
+        to: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy biểu đồ 1 tuần pharma company:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy dữ liệu biểu đồ 1 tuần",
+      error: error.message,
+    });
+  }
+}
+
+
+// So Sánh ngày hnay và ngày hqua trên lệch bao nhiêu 
+
+export const pharmaCompanyChartTodayYesterday = async (req , res) => {
+
+// Thống kê ProofOfProduction theo khoảng thời gian
+  try {
+    const user = req.user;
+    // Tìm PharmaCompany theo user
+    const pharmaCompany = await PharmaCompany.findOne({ user: user._id });
+    if (!pharmaCompany) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy pharma company",
+        error: "PharmaCompany not found",
+      });
+    }
+    // Tính đúng khoảng thời gian (bắt đầu của hôm nay và hôm trước) theo timezone server
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+    // Đếm số production của hôm qua (từ startOfYesterday đến trước startOfToday)
+    const yesterdayCount = await ProofOfProduction.countDocuments({
+      manufacturer: pharmaCompany._id,
+      createdAt: { $gte: startOfYesterday, $lt: startOfToday },
+    });
+
+    // Đếm số production của hôm nay (từ startOfToday trở đi)
+    const todayCount = await ProofOfProduction.countDocuments({
+      manufacturer: pharmaCompany._id,
+      createdAt: { $gte: startOfToday },
+    });
+
+    // Tính chênh lệch và phần trăm thay đổi
+    const diff = todayCount - yesterdayCount;
+    let percentChange = null;
+    if (yesterdayCount === 0) {
+      percentChange = todayCount === 0 ? 0 : 100; 
+    } else {
+      percentChange = (diff / yesterdayCount) * 100;
+    }
+
+    const todayProductions = await ProofOfProduction.find({
+      manufacturer: pharmaCompany._id,
+      createdAt: { $gte: startOfToday },
+    })
+      .populate("drug", "tradeName atcCode")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        todayCount,
+        yesterdayCount,
+        diff,
+        percentChange,
+        todayProductionsCount: todayProductions.length,
+        todayProductions: todayProductions,
+        period: {
+          yesterdayFrom: startOfYesterday,
+          yesterdayTo: new Date(startOfToday.getTime() - 1),
+          todayFrom: startOfToday,
+          now: new Date(),
+        },
+      },
+    });
+
+  } catch (error) {
+    console.error("Lỗi khi lấy biểu đồ 1 tuần pharma company:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi lấy dữ liệu biểu đồ 1 tuần",
+      error: error.message,
+    });
+  }
+}
+
+
+export const getProofOfProductionByDateRange = async (req, res) => {
+  try {
+    const user = req.user;
+    const { startDate, endDate } = req.query;
+
+
+    // Validate dates
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp startDate và endDate",
+      });
+    }
+
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    // Validate date range
+    if (start > end) {
+      return res.status(400).json({
+        success: false,
+        message: "startDate phải nhỏ hơn hoặc bằng endDate",
+      });
+    }
+
+    // Tìm PharmaCompany
+    const pharmaCompany = await PharmaCompany.findOne({ user: user._id });
+    if (!pharmaCompany) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy pharma company",
+      });
+    }
+
+    // Query productions trong khoảng thời gian
+    const productions = await ProofOfProduction.find({
+      manufacturer: pharmaCompany._id,
+      createdAt: { 
+        $gte: start,
+        $lte: end 
+      }
+    })
+    .populate("drug", "tradeName atcCode")
+    .sort({ createdAt: -1 });
+
+    // Tính tổng số lượng sản xuất
+    const totalQuantity = productions.reduce((sum, prod) => sum + (prod.quantity || 0), 0);
+
+    // Group theo ngày để dễ vẽ biểu đồ
+    const dailyStats = {};
+    productions.forEach(prod => {
+      const date = prod.createdAt.toISOString().split('T')[0];
+      if (!dailyStats[date]) {
+        dailyStats[date] = {
+          count: 0,
+          quantity: 0,
+          productions: []
+        };
+      }
+      dailyStats[date].count++;
+      dailyStats[date].quantity += (prod.quantity || 0);
+      dailyStats[date].productions.push({
+        id: prod._id,
+        drug: prod.drug,
+        quantity: prod.quantity,
+        batchNumber: prod.batchNumber,
+        createdAt: prod.createdAt
+      });
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        dateRange: {
+          from: start,
+          to: end,
+          days: Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+        },
+        summary: {
+          totalProductions: productions.length,
+          totalQuantity,
+          averagePerDay: productions.length / Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
+        },
+        dailyStats,
+        productions
+      }
+    });
+
+  } catch (error) {
+    console.error("Lỗi khi thống kê theo khoảng thời gian:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi thống kê",
+      error: error.message
+    });
+  }
+};
+
+
+export const getProofOfDistributionByDateRange = async (req, res) => {
+  try {
+    const user = req.user;
+    const { startDate, endDate } = req.query;
+
+
+    // Validate dates
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp startDate và endDate",
+      });
+    }
+
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    // Validate date range
+    if (start > end) {
+      return res.status(400).json({
+        success: false,
+        message: "startDate phải nhỏ hơn hoặc bằng endDate",
+      });
+    }
+
+    // Tìm PharmaCompany
+    const pharmaCompany = await PharmaCompany.findOne({ user: user._id });
+    if (!pharmaCompany) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy pharma company",
+      });
+    }
+
+    // Query productions trong khoảng thời gian
+    const distributions = await ProofOfDistribution.find({
+      fromManufacturer: user._id,
+      createdAt: { 
+        $gte: start,
+        $lte: end 
+      }
+    })
+    .sort({ createdAt: -1 });
+
+    // Tính tổng số lượng sản xuất
+    const totalQuantity = distributions.reduce((sum, prod) => sum + (prod.quantity || 0), 0);
+
+    // Group theo ngày để dễ vẽ biểu đồ
+    const dailyStats = {};
+    distributions.forEach(prod => {
+      const date = prod.createdAt.toISOString().split('T')[0];
+      if (!dailyStats[date]) {
+        dailyStats[date] = {
+          count: 0,
+          quantity: 0,
+          distributions: []
+        };
+      }
+      dailyStats[date].count++;
+      dailyStats[date].quantity += (prod.quantity || 0);
+      dailyStats[date].distributions.push({
+        id: prod._id,
+        drug: prod.drug,
+        quantity: prod.quantity,
+        batchNumber: prod.batchNumber,
+        createdAt: prod.createdAt
+      });
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        dateRange: {
+          from: start,
+          to: end,
+          days: Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+        },
+        summary: {
+          totalDistribution: distributions.length,
+          totalQuantity,
+          averagePerDay: distributions.length / Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
+        },
+        dailyStats,
+        distributions
+      }
+    });
+
+  } catch (error) {
+    console.error("Lỗi khi thống kê theo khoảng thời gian:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi thống kê",
+      error: error.message
     });
   }
 };

@@ -16,6 +16,10 @@ import {
   getPharmaCompanyInfo,
   getDistributors,
   getAvailableTokensForProduction,
+  pharmaCompanyChart1Week,
+  pharmaCompanyChartTodayYesterday ,
+  getProofOfProductionByDateRange ,
+  getProofOfDistributionByDateRange
 } from "../controllers/pharmaCompanyController.js";
 import { authenticate, authorize } from "../middleware/authMiddleware.js";
 
@@ -51,7 +55,16 @@ router.get("/production/:productionId/available-tokens", getAvailableTokensForPr
 router.get("/transfer/history", getTransferHistory);
 router.get("/statistics", getStatistics);
 
+router.get("/get-one-week-chart" , pharmaCompanyChart1Week)
+
+router.get("/today-yesterday-chart" , pharmaCompanyChartTodayYesterday)
+
+router.get("/get-proof-of-productions-chart" , getProofOfProductionByDateRange);
+
+router.get("/get-proof-of-distributions-chart" , getProofOfDistributionByDateRange);
+
 // ============ QUẢN LÝ THÔNG TIN CÁ NHÂN ============
+
 router.get("/profile", getPharmaCompanyInfo);
 
 // ============ DANH SÁCH DISTRIBUTORS ============
