@@ -7,6 +7,7 @@ import PharmaCompany from "../models/PharmaCompany.js";
 import User from "../models/User.js";
 import Distributor from "../models/Distributor.js";
 import { uploadFolderToIPFS } from "../services/ipfsService.js";
+import ManufactureIPFSStatusModel from "../models/manufactureIPFSStatus.js";
 
 // ============ QUẢN LÝ THUỐC ============
 
@@ -427,6 +428,15 @@ export const uploadDrugPackageToIPFS = async (req, res) => {
 
     const { quantity, metadata } = req.body;
 
+    const manufacturer = await PharmaCompany.findOne({ user: user._id });
+
+    if(!manufacturer) {
+      return res.status(400).json({
+        success: false,
+        message: "Không tìm thấy nhà sản xuất"
+      });
+    }
+
     if (!quantity || quantity <= 0) {
       return res.status(400).json({
         success: false,
@@ -436,6 +446,17 @@ export const uploadDrugPackageToIPFS = async (req, res) => {
 
     // Gọi Pinata IPFS để upload folder
     const ipfsResult = await uploadFolderToIPFS(quantity, metadata);
+
+    // Save into database
+    const manufactureIPFSStatusDoc = new ManufactureIPFSStatusModel({
+      manufacture: manufacturer._id,
+      timespan: Date.now(),
+      status: "Pending",
+      quantity: quantity,
+      IPFSUrl: ipfsResult.ipfsUrl,
+    });
+
+    await manufactureIPFSStatusDoc.save();
 
     return res.status(200).json({
       success: true,
@@ -491,6 +512,10 @@ export const saveMintedNFTs = async (req, res) => {
       metadata,
     } = req.body;
 
+    // Find the element in db
+
+    
+
     if (!drugId || !tokenIds || !transactionHash || !quantity || !ipfsUrl) {
       return res.status(400).json({
         success: false,
@@ -539,6 +564,19 @@ export const saveMintedNFTs = async (req, res) => {
         message: `Một số tokenId đã tồn tại trong hệ thống: ${existingNFTs.map(nft => nft.tokenId).join(", ")}`,
       });
     }
+
+    
+    const result = await ManufactureIPFSStatusModel.updateOne(
+        { 
+            manufacture: pharmaCompany._id,
+            IPFSUrl: ipfsUrl
+        },
+        { 
+            $set: { status: "SuccessFully" }
+        }
+    );
+
+    console.log(`${result.modifiedCount} tài liệu đã được cập nhật.`);
 
     // Tạo Proof of Production
     const proofOfProduction = new ProofOfProduction({
@@ -2130,3 +2168,49 @@ export const getProofOfDistributionByDateRange = async (req, res) => {
     });
   }
 };
+
+
+export const getManufactureIPFSStatus = async (req , res) => 
+  {
+  const user = req.user;
+  if(user)
+  {
+    const findManufacture = await PharmaCompany.findOne({
+      user : user._id
+    })
+
+    if(findManufacture)
+    {
+      console.log(findManufacture.name)
+      const findManufactureIPFSStatus = await ManufactureIPFSStatusModel.find({
+        manufacture : findManufacture._id
+      })
+
+      if(findManufactureIPFSStatus)
+      {
+        return res.status(200).json({
+          success: true,
+          message: "Đã tìm thấy thông tin IPFS của Manufacture" ,
+          data : {
+            ManufactureIPFSStatus : findManufactureIPFSStatus
+          }
+        })
+      }else{
+        return res.status(400).json({
+          success: false,
+          message: "Lỗi Không tìm thấy thông tin IPFS của manufacture này"
+        })
+      }
+    }else{
+      return res.status(400).json({
+        success: false,
+        message: "Lỗi Không tìm thấy thông tin Manufacture"
+      })
+    }
+  }else{
+    return res.status(400).json({
+      success: false,
+      message: "Lỗi Không tìm thấy thông tin User"
+    })
+  }
+}

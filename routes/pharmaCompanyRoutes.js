@@ -19,7 +19,8 @@ import {
   pharmaCompanyChart1Week,
   pharmaCompanyChartTodayYesterday ,
   getProofOfProductionByDateRange ,
-  getProofOfDistributionByDateRange
+  getProofOfDistributionByDateRange,
+  getManufactureIPFSStatus
 } from "../controllers/pharmaCompanyController.js";
 import { authenticate, authorize } from "../middleware/authMiddleware.js";
 
@@ -55,6 +56,8 @@ router.get("/production/:productionId/available-tokens", getAvailableTokensForPr
 router.get("/transfer/history", getTransferHistory);
 router.get("/statistics", getStatistics);
 
+// CHARTS
+
 router.get("/get-one-week-chart" , pharmaCompanyChart1Week)
 
 router.get("/today-yesterday-chart" , pharmaCompanyChartTodayYesterday)
@@ -69,6 +72,11 @@ router.get("/profile", getPharmaCompanyInfo);
 
 // ============ DANH SÁCH DISTRIBUTORS ============
 router.get("/distributors", getDistributors);
+
+
+// Lấy danh sách Manufacture IPFS
+
+router.get("/getManufactureIPFS" , getManufactureIPFSStatus)
 
 export default router;
 
