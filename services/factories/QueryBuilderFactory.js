@@ -145,6 +145,106 @@ export class QueryBuilderFactory {
       skip,
     };
   }
+
+  static createSearchFilter(search, fields) {
+    if (!search || !fields || fields.length === 0) {
+      return {};
+    }
+    return {
+      $or: fields.map(field => ({
+        [field]: { $regex: search, $options: "i" }
+      }))
+    };
+  }
+
+
+  static createUserFilter(options = {}) {
+    const filter = {};
+    if (options.role) {
+      filter.role = options.role;
+    }
+    if (options.status) {
+      filter.status = options.status;
+    }
+    if (options.search) {
+      filter.$or = [
+        { username: { $regex: options.search, $options: "i" } },
+        { email: { $regex: options.search, $options: "i" } },
+        { fullName: { $regex: options.search, $options: "i" } },
+      ];
+    }
+    return filter;
+  }
+
+
+  static createDrugSearchFilter(options = {}) {
+    const filter = {};
+    
+    if (options.status) {
+      filter.status = options.status;
+    } else if (!options.manufacturerId) {
+      // Default to active nếu không có manufacturerId (public search)
+      filter.status = "active";
+    }
+    
+    if (options.manufacturerId) {
+      filter.manufacturer = options.manufacturerId;
+    }
+    
+    if (options.atcCode) {
+      filter.atcCode = { $regex: options.atcCode, $options: "i" };
+    }
+    
+    if (options.search) {
+      filter.$or = [
+        { tradeName: { $regex: options.search, $options: "i" } },
+        { genericName: { $regex: options.search, $options: "i" } },
+        { atcCode: { $regex: options.search, $options: "i" } },
+      ];
+    }
+    
+    return filter;
+  }
+
+  static createPharmacySearchFilter(options = {}) {
+    const filter = {};
+    
+    if (options.status) {
+      filter.status = options.status;
+    } else {
+      filter.status = "active";
+    }
+    
+    if (options.search) {
+      filter.$or = [
+        { name: { $regex: options.search, $options: "i" } },
+        { licenseNo: { $regex: options.search, $options: "i" } },
+        { taxCode: { $regex: options.search, $options: "i" } },
+      ];
+    }
+    
+    return filter;
+  }
+
+  static createDistributorSearchFilter(options = {}) {
+    const filter = {};
+    
+    if (options.status) {
+      filter.status = options.status;
+    } else {
+      filter.status = "active";
+    }
+    
+    if (options.search) {
+      filter.$or = [
+        { name: { $regex: options.search, $options: "i" } },
+        { licenseNo: { $regex: options.search, $options: "i" } },
+        { taxCode: { $regex: options.search, $options: "i" } },
+      ];
+    }
+    
+    return filter;
+  }
 }
 
 export default QueryBuilderFactory;
