@@ -105,6 +105,13 @@ export const getPharmacyQualityStats = async (req, res) => {
 
 export const getBlockchainStats = async (req, res) => {
   try {
+    const allowedRoles = ["pharma_company", "distributor", "pharmacy", "system_admin"];
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Role không được phép truy cập thống kê blockchain",
+      });
+    }
     const strategy = await StatisticsFactory.createStrategyForBlockchain(req.user);
     const data = await strategy.getBlockchainStats();
 
@@ -119,6 +126,13 @@ export const getBlockchainStats = async (req, res) => {
 
 export const getAlertsStats = async (req, res) => {
   try {
+    const allowedRoles = ["pharma_company", "distributor", "pharmacy", "system_admin"];
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Role không được phép truy cập thống kê cảnh báo",
+      });
+    }
     const strategy = await StatisticsFactory.createStrategy(req.user);
     const alerts = await strategy.getAlertsStats();
 
@@ -138,6 +152,13 @@ export const getAlertsStats = async (req, res) => {
 
 export const getMonthlyTrends = async (req, res) => {
   try {
+    const allowedRoles = ["pharma_company", "distributor", "pharmacy", "system_admin"];
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Role không được phép truy cập thống kê xu hướng",
+      });
+    }
     const { months = 6 } = req.query;
     const monthsCount = parseInt(months);
 
@@ -175,6 +196,13 @@ export const getProductAnalytics = async (req, res) => {
 
 export const getPerformanceMetrics = async (req, res) => {
   try {
+    const allowedRoles = ["pharma_company", "distributor", "pharmacy", "system_admin"];
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Role không được phép truy cập thống kê hiệu suất",
+      });
+    }
     const { startDate, endDate } = req.query;
 
     const strategy = await StatisticsFactory.createStrategy(req.user);
@@ -204,6 +232,13 @@ export const getPerformanceMetrics = async (req, res) => {
 
 export const getComplianceStats = async (req, res) => {
   try {
+    const allowedRoles = ["pharma_company", "distributor", "pharmacy", "system_admin"];
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Role không được phép truy cập thống kê tuân thủ",
+      });
+    }
     const strategy = await StatisticsFactory.createStrategy(req.user);
     const compliance = await strategy.getComplianceStats();
 

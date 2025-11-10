@@ -15,6 +15,8 @@ import {
   addDistributorToBlockchain,
   addPharmacyToBlockchain,
 } from "../services/blockchainService.js";
+import QueryBuilderFactory from "../services/factories/QueryBuilderFactory.js";
+import ResponseFormatterFactory from "../services/factories/ResponseFormatterFactory.js";
 import { handleError } from "../utils/errorHandler.js";
 
 export const getRegistrationStatistics = async (req, res) => {

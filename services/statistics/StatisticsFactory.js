@@ -4,6 +4,7 @@ import Pharmacy from "../../models/Pharmacy.js";
 import { ManufacturerStatisticsStrategy } from "./ManufacturerStatisticsStrategy.js";
 import { DistributorStatisticsStrategy } from "./DistributorStatisticsStrategy.js";
 import { PharmacyStatisticsStrategy } from "./PharmacyStatisticsStrategy.js";
+import AdminStatisticsStrategy from "./AdminStatisticsStrategy.js";
 import StatisticsStrategy from "./StatisticsStrategy.js";
 
 
@@ -36,6 +37,10 @@ export class StatisticsFactory {
           throw new Error("Không tìm thấy pharmacy");
         }
         return new PharmacyStatisticsStrategy(user, pharmacy);
+      }
+
+      case "system_admin": {
+        return new AdminStatisticsStrategy(user);
       }
 
       default:
