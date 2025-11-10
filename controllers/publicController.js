@@ -174,7 +174,7 @@ export const trackDrugByNFTId = async (req, res) => {
 
     const base64urlString = Buffer.from(JSON.stringify(blockchainData)).toString('base64url');
 
-    const url = `http://localhost:5173/verify?data=${base64urlString}`;
+    const url = `https://ailusion.io.vn/verify?data=${base64urlString}`;
 
     return res.redirect(302, url);
 
@@ -186,7 +186,7 @@ export const trackDrugByNFTId = async (req, res) => {
       error: error.message,
     };
     const base64Urlstring = Buffer.from(JSON.stringify(errorMessage)).toString('base64url');
-    const url = `http://localhost:5173/verify?data=${base64Urlstring}`;
+    const url = `https://ailusion.io.vn/verify?data=${base64Urlstring}`;
     return res.redirect(302, url);
   }
 };
