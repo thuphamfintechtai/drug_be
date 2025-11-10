@@ -64,8 +64,22 @@ export const login = async (req, res) => {
         message: `Tài khoản của bạn đang ở trạng thái: ${user.status}`,
       });
     }
-
-    const businessProfile = await BusinessEntityFactory.getBusinessEntity(user);
+    let businessProfile = null;
+    let formattedProfile = null;
+    
+    if (["pharma_company", "distributor", "pharmacy"].includes(user.role)) {
+      try {
+        businessProfile = await BusinessEntityFactory.getBusinessEntity(user);
+        formattedProfile = BusinessEntityFactory.formatBusinessProfile(businessProfile);
+        if (formattedProfile && user.walletAddress) {
+          formattedProfile.walletAddress = user.walletAddress;
+        }
+      } catch (error) {
+        // Nếu không tìm thấy business entity, vẫn cho phép đăng nhập nhưng không có businessProfile
+        console.log(`Không tìm thấy business entity cho user ${user._id} với role ${user.role}`);
+        formattedProfile = null;
+      }
+    }
 
     const token = generateToken({
       id: user._id.toString(),
@@ -75,11 +89,6 @@ export const login = async (req, res) => {
 
     const userResponse = user.toObject();
     delete userResponse.password;
-
-    const formattedProfile = BusinessEntityFactory.formatBusinessProfile(businessProfile);
-    if (formattedProfile && user.walletAddress) {
-      formattedProfile.walletAddress = user.walletAddress;
-    }
 
     return res.status(200).json({
       success: true,
