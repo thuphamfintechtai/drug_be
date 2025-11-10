@@ -517,7 +517,7 @@ export const saveMintedNFTs = async (req, res) => {
     // Lưu mã QR vào trong console
     for(let i = 0; i < tokenIds.length;i++)
     {
-        const qrTargetUrl = `http://localhost:9000/api/publicRoute/scanQR/${tokenIds[i].toString()}`;
+        const qrTargetUrl = `https://ailusion.io.vn/api/publicRoute/scanQR/${tokenIds[i].toString()}`;
         const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrTargetUrl)}`;
 
         console.log("Target URL for tokenId :" + tokenIds[i] + " " + " : " + qrTargetUrl)
