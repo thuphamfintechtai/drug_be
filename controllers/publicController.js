@@ -46,25 +46,38 @@ export const trackDrugByNFTId = async (req, res) => {
 
     // Tìm các invoice và proof liên quan trong supply chain
     const manufacturerInvoice = await ManufacturerInvoice.findOne({
-      nftInfo: nft._id,
+      $or: [
+        { nftInfo: nft._id },
+        nft.proofOfProduction ? { proofOfProduction: nft.proofOfProduction } : null,
+      ].filter(Boolean),
     })
       .populate("fromManufacturer", "username email fullName walletAddress")
       .populate("toDistributor", "username email fullName walletAddress");
 
     const proofOfDistribution = await ProofOfDistribution.findOne({
-      manufacturerInvoice: manufacturerInvoice?._id,
+      $or: [
+        manufacturerInvoice?._id ? { manufacturerInvoice: manufacturerInvoice._id } : null,
+        nft.proofOfProduction ? { proofOfProduction: nft.proofOfProduction } : null,
+        { nftInfo: nft._id },
+      ].filter(Boolean),
     })
       .populate("fromManufacturer", "username email fullName")
       .populate("toDistributor", "username email fullName");
 
     const commercialInvoice = await CommercialInvoice.findOne({
-      nftInfo: nft._id,
+      $or: [
+        { nftInfo: nft._id },
+        proofOfDistribution?._id ? { proofOfDistribution: proofOfDistribution._id } : null,
+      ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName walletAddress")
       .populate("toPharmacy", "username email fullName walletAddress");
 
     const proofOfPharmacy = await ProofOfPharmacy.findOne({
-      commercialInvoice: commercialInvoice?._id,
+      $or: [
+        commercialInvoice?._id ? { commercialInvoice: commercialInvoice._id } : null,
+        { nftInfo: nft._id },
+      ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName")
       .populate("toPharmacy", "username email fullName");
@@ -120,7 +133,7 @@ export const trackDrugByNFTId = async (req, res) => {
       });
     }
 
-    if (proofOfPharmacy.chainTxHash != null) {
+    if (proofOfPharmacy) {
       journey.push({
         stage: "pharmacy_received",
         description: "Nhà thuốc đã nhận hàng",
@@ -232,25 +245,38 @@ export const trackingDrugsInfo = async (req, res) => {
 
     // Tìm các invoice và proof liên quan trong supply chain
     const manufacturerInvoice = await ManufacturerInvoice.findOne({
-      nftInfo: nft._id,
+      $or: [
+        { nftInfo: nft._id },
+        nft.proofOfProduction ? { proofOfProduction: nft.proofOfProduction } : null,
+      ].filter(Boolean),
     })
       .populate("fromManufacturer", "username email fullName walletAddress")
       .populate("toDistributor", "username email fullName walletAddress");
 
     const proofOfDistribution = await ProofOfDistribution.findOne({
-      manufacturerInvoice: manufacturerInvoice?._id,
+      $or: [
+        manufacturerInvoice?._id ? { manufacturerInvoice: manufacturerInvoice._id } : null,
+        nft.proofOfProduction ? { proofOfProduction: nft.proofOfProduction } : null,
+        { nftInfo: nft._id },
+      ].filter(Boolean),
     })
       .populate("fromManufacturer", "username email fullName")
       .populate("toDistributor", "username email fullName");
 
     const commercialInvoice = await CommercialInvoice.findOne({
-      nftInfo: nft._id,
+      $or: [
+        { nftInfo: nft._id },
+        proofOfDistribution?._id ? { proofOfDistribution: proofOfDistribution._id } : null,
+      ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName walletAddress")
       .populate("toPharmacy", "username email fullName walletAddress");
 
     const proofOfPharmacy = await ProofOfPharmacy.findOne({
-      commercialInvoice: commercialInvoice?._id,
+      $or: [
+        commercialInvoice?._id ? { commercialInvoice: commercialInvoice._id } : null,
+        { nftInfo: nft._id },
+      ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName")
       .populate("toPharmacy", "username email fullName");
@@ -306,7 +332,7 @@ export const trackingDrugsInfo = async (req, res) => {
       });
     }
 
-    if (proofOfPharmacy.chainTxHash != null) {
+    if (proofOfPharmacy) {
       journey.push({
         stage: "pharmacy_received",
         description: "Nhà thuốc đã nhận hàng",
