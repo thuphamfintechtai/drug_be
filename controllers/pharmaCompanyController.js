@@ -14,6 +14,7 @@ import QueryBuilderFactory from "../services/factories/QueryBuilderFactory.js";
 import { DateHelper, DataAggregationService, StatisticsCalculationService, NFTService, ValidationService } from "../services/utils/index.js";
 import { sendValidationError } from "../utils/validationResponse.js";
 import ResponseFormatterFactory from "../services/factories/ResponseFormatterFactory.js";
+import manufactureIPFSStatus from "../models/manufactureIPFSStatus.js";
 
 export const addDrug = async (req, res) => {
   try {
@@ -1822,6 +1823,61 @@ export const getManufactureIPFSStatus = async (req , res) =>
     })
   }
 }
+
+export const getManufactureIPFSNoneSuccessInfo = async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Validate user
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Lỗi Không tìm thấy thông tin User"
+      });
+    }
+
+    // Find manufacturer
+    const manufacturer = await PharmaCompany.findOne({
+      user: user._id
+    });
+
+    if (!manufacturer) {
+      return res.status(400).json({
+        success: false,
+        message: "Lỗi Không tìm thấy thông tin Manufacture"
+      });
+    }
+
+    console.log("Manufacturer name:", manufacturer.name);
+
+    // Find IPFS statuses that are not "SuccessFully"
+    const manufacturerIPFSStatuses = await ManufactureIPFSStatusModel.find({
+      manufacture: manufacturer._id,
+      status: { $ne: "SuccessFully" }  // Thêm điều kiện status khác SuccessFully
+    });
+
+    if (!manufacturerIPFSStatuses || manufacturerIPFSStatuses.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Lỗi Không tìm thấy thông tin IPFS của manufacture này"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Đã tìm thấy thông tin IPFS của Manufacture",
+      data: {
+        ManufactureIPFSStatus: manufacturerIPFSStatuses
+      }
+    });
+
+  } catch (error) {
+    return handleError(error, "Lỗi khi lấy thông tin IPFS:", res, "Lỗi server khi lấy thông tin IPFS");
+  }
+}
+
+
+
 
 export const getManufacturerTransfersByDateRange = async (req, res) => {
   try {
