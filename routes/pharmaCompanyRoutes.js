@@ -22,6 +22,7 @@ import {
   getProofOfDistributionByDateRange,
   getManufactureIPFSStatus,
   getManufacturerTransfersByDateRange,
+  getManufactureIPFSNoneSuccessInfo
 } from "../controllers/pharmaCompanyController.js";
 import { authenticate, authorize } from "../middleware/authMiddleware.js";
 
@@ -72,6 +73,8 @@ router.get("/distributors", getDistributors);
 
 // ============ QUẢN LÝ IPFS ============
 router.get("/ipfs-status", getManufactureIPFSStatus);
+
+router.get("/ipfs-status-undone" , getManufactureIPFSNoneSuccessInfo)
 
 export default router;
 
