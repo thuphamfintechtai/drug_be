@@ -47,8 +47,19 @@ export const trackDrugByNFTId = async (req, res) => {
     // Lấy production để có batchNumber
     let production = null;
     let batchNumber = nft.batchNumber;
+    let productionId = null;
+    
     if (nft.proofOfProduction) {
-      production = await ProofOfProduction.findById(nft.proofOfProduction);
+      // Xử lý cả trường hợp đã populate (object) và chưa populate (ObjectId)
+      productionId = nft.proofOfProduction._id || nft.proofOfProduction;
+      
+      // Nếu đã populate, dùng trực tiếp, nếu chưa thì query lại
+      if (nft.proofOfProduction._id) {
+        production = nft.proofOfProduction;
+      } else {
+        production = await ProofOfProduction.findById(productionId);
+      }
+      
       if (production && production.batchNumber) {
         batchNumber = production.batchNumber;
       }
@@ -63,13 +74,24 @@ export const trackDrugByNFTId = async (req, res) => {
 
     // Tìm tất cả proofOfProduction trong cùng batch
     let batchProductionIds = [];
-    if (nft.proofOfProduction) {
-      batchProductionIds.push(nft.proofOfProduction);
+    if (productionId) {
+      batchProductionIds.push(productionId);
     }
     if (batchNumber) {
       const batchProductions = await ProofOfProduction.find({ batchNumber }).select("_id");
-      batchProductionIds = [...batchProductionIds, ...batchProductions.map(p => p._id)];
-      batchProductionIds = [...new Set(batchProductionIds.map(id => id.toString()))];
+      const productionIds = batchProductions.map(p => p._id);
+      batchProductionIds = [...batchProductionIds, ...productionIds];
+      // Loại bỏ duplicate bằng cách so sánh ObjectId
+      const uniqueIds = [];
+      const seen = new Set();
+      batchProductionIds.forEach(id => {
+        const idStr = id.toString();
+        if (!seen.has(idStr)) {
+          seen.add(idStr);
+          uniqueIds.push(id);
+        }
+      });
+      batchProductionIds = uniqueIds;
     }
 
     // Tìm các invoice và proof liên quan trong supply chain (tìm theo batch)
@@ -290,8 +312,19 @@ export const trackingDrugsInfo = async (req, res) => {
     // Lấy production để có batchNumber
     let production = null;
     let batchNumber = nft.batchNumber;
+    let productionId = null;
+    
     if (nft.proofOfProduction) {
-      production = await ProofOfProduction.findById(nft.proofOfProduction);
+      // Xử lý cả trường hợp đã populate (object) và chưa populate (ObjectId)
+      productionId = nft.proofOfProduction._id || nft.proofOfProduction;
+      
+      // Nếu đã populate, dùng trực tiếp, nếu chưa thì query lại
+      if (nft.proofOfProduction._id) {
+        production = nft.proofOfProduction;
+      } else {
+        production = await ProofOfProduction.findById(productionId);
+      }
+      
       if (production && production.batchNumber) {
         batchNumber = production.batchNumber;
       }
@@ -306,13 +339,24 @@ export const trackingDrugsInfo = async (req, res) => {
 
     // Tìm tất cả proofOfProduction trong cùng batch
     let batchProductionIds = [];
-    if (nft.proofOfProduction) {
-      batchProductionIds.push(nft.proofOfProduction);
+    if (productionId) {
+      batchProductionIds.push(productionId);
     }
     if (batchNumber) {
       const batchProductions = await ProofOfProduction.find({ batchNumber }).select("_id");
-      batchProductionIds = [...batchProductionIds, ...batchProductions.map(p => p._id)];
-      batchProductionIds = [...new Set(batchProductionIds.map(id => id.toString()))];
+      const productionIds = batchProductions.map(p => p._id);
+      batchProductionIds = [...batchProductionIds, ...productionIds];
+      // Loại bỏ duplicate bằng cách so sánh ObjectId
+      const uniqueIds = [];
+      const seen = new Set();
+      batchProductionIds.forEach(id => {
+        const idStr = id.toString();
+        if (!seen.has(idStr)) {
+          seen.add(idStr);
+          uniqueIds.push(id);
+        }
+      });
+      batchProductionIds = uniqueIds;
     }
 
     // Tìm các invoice và proof liên quan trong supply chain (tìm theo batch)
