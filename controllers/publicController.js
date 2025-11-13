@@ -95,7 +95,8 @@ export const trackDrugByNFTId = async (req, res) => {
     }
 
     // Tìm các invoice và proof liên quan trong supply chain (tìm theo batch)
-    const manufacturerInvoice = await ManufacturerInvoice.findOne({
+    // Tìm tất cả, không chỉ findOne để có thể tìm được nhiều hơn
+    const manufacturerInvoices = await ManufacturerInvoice.find({
       $or: [
         { nftInfo: { $in: batchNFTIds } },
         batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
@@ -104,10 +105,13 @@ export const trackDrugByNFTId = async (req, res) => {
       .populate("fromManufacturer", "username email fullName walletAddress")
       .populate("toDistributor", "username email fullName walletAddress")
       .sort({ createdAt: -1 });
+    
+    const manufacturerInvoice = manufacturerInvoices[0] || null;
+    const manufacturerInvoiceIds = manufacturerInvoices.map(inv => inv._id);
 
-    const proofOfDistribution = await ProofOfDistribution.findOne({
+    const proofOfDistributions = await ProofOfDistribution.find({
       $or: [
-        manufacturerInvoice?._id ? { manufacturerInvoice: manufacturerInvoice._id } : null,
+        manufacturerInvoiceIds.length > 0 ? { manufacturerInvoice: { $in: manufacturerInvoiceIds } } : null,
         batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
         { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
@@ -115,26 +119,36 @@ export const trackDrugByNFTId = async (req, res) => {
       .populate("fromManufacturer", "username email fullName")
       .populate("toDistributor", "username email fullName")
       .sort({ createdAt: -1 });
+    
+    const proofOfDistribution = proofOfDistributions[0] || null;
+    const proofOfDistributionIds = proofOfDistributions.map(pod => pod._id);
 
-    const commercialInvoice = await CommercialInvoice.findOne({
+    // Tìm ProofOfPharmacy có proofOfDistribution hoặc nftInfo trong batch
+    const proofOfPharmacies = await ProofOfPharmacy.find({
       $or: [
-        { nftInfo: { $in: batchNFTIds } },
-        proofOfDistribution?._id ? { proofOfDistribution: proofOfDistribution._id } : null,
-      ].filter(Boolean),
-    })
-      .populate("fromDistributor", "username email fullName walletAddress")
-      .populate("toPharmacy", "username email fullName walletAddress")
-      .sort({ createdAt: -1 });
-
-    const proofOfPharmacy = await ProofOfPharmacy.findOne({
-      $or: [
-        commercialInvoice?._id ? { commercialInvoice: commercialInvoice._id } : null,
+        proofOfDistributionIds.length > 0 ? { proofOfDistribution: { $in: proofOfDistributionIds } } : null,
         { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName")
       .populate("toPharmacy", "username email fullName")
       .sort({ createdAt: -1 });
+    
+    const proofOfPharmacy = proofOfPharmacies[0] || null;
+    const proofOfPharmacyIds = proofOfPharmacies.map(pop => pop._id);
+
+    // Tìm CommercialInvoice qua nftInfo hoặc proofOfPharmacy
+    const commercialInvoices = await CommercialInvoice.find({
+      $or: [
+        { nftInfo: { $in: batchNFTIds } },
+        proofOfPharmacyIds.length > 0 ? { proofOfPharmacy: { $in: proofOfPharmacyIds } } : null,
+      ].filter(Boolean),
+    })
+      .populate("fromDistributor", "username email fullName walletAddress")
+      .populate("toPharmacy", "username email fullName walletAddress")
+      .sort({ createdAt: -1 });
+    
+    const commercialInvoice = commercialInvoices[0] || null;
 
     // Tạo chuỗi hành trình từ các thông tin đã tìm được
     const journey = [];
@@ -360,7 +374,8 @@ export const trackingDrugsInfo = async (req, res) => {
     }
 
     // Tìm các invoice và proof liên quan trong supply chain (tìm theo batch)
-    const manufacturerInvoice = await ManufacturerInvoice.findOne({
+    // Tìm tất cả, không chỉ findOne để có thể tìm được nhiều hơn
+    const manufacturerInvoices = await ManufacturerInvoice.find({
       $or: [
         { nftInfo: { $in: batchNFTIds } },
         batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
@@ -369,10 +384,13 @@ export const trackingDrugsInfo = async (req, res) => {
       .populate("fromManufacturer", "username email fullName walletAddress")
       .populate("toDistributor", "username email fullName walletAddress")
       .sort({ createdAt: -1 });
+    
+    const manufacturerInvoice = manufacturerInvoices[0] || null;
+    const manufacturerInvoiceIds = manufacturerInvoices.map(inv => inv._id);
 
-    const proofOfDistribution = await ProofOfDistribution.findOne({
+    const proofOfDistributions = await ProofOfDistribution.find({
       $or: [
-        manufacturerInvoice?._id ? { manufacturerInvoice: manufacturerInvoice._id } : null,
+        manufacturerInvoiceIds.length > 0 ? { manufacturerInvoice: { $in: manufacturerInvoiceIds } } : null,
         batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
         { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
@@ -380,26 +398,36 @@ export const trackingDrugsInfo = async (req, res) => {
       .populate("fromManufacturer", "username email fullName")
       .populate("toDistributor", "username email fullName")
       .sort({ createdAt: -1 });
+    
+    const proofOfDistribution = proofOfDistributions[0] || null;
+    const proofOfDistributionIds = proofOfDistributions.map(pod => pod._id);
 
-    const commercialInvoice = await CommercialInvoice.findOne({
+    // Tìm ProofOfPharmacy có proofOfDistribution hoặc nftInfo trong batch
+    const proofOfPharmacies = await ProofOfPharmacy.find({
       $or: [
-        { nftInfo: { $in: batchNFTIds } },
-        proofOfDistribution?._id ? { proofOfDistribution: proofOfDistribution._id } : null,
-      ].filter(Boolean),
-    })
-      .populate("fromDistributor", "username email fullName walletAddress")
-      .populate("toPharmacy", "username email fullName walletAddress")
-      .sort({ createdAt: -1 });
-
-    const proofOfPharmacy = await ProofOfPharmacy.findOne({
-      $or: [
-        commercialInvoice?._id ? { commercialInvoice: commercialInvoice._id } : null,
+        proofOfDistributionIds.length > 0 ? { proofOfDistribution: { $in: proofOfDistributionIds } } : null,
         { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName")
       .populate("toPharmacy", "username email fullName")
       .sort({ createdAt: -1 });
+    
+    const proofOfPharmacy = proofOfPharmacies[0] || null;
+    const proofOfPharmacyIds = proofOfPharmacies.map(pop => pop._id);
+
+    // Tìm CommercialInvoice qua nftInfo hoặc proofOfPharmacy
+    const commercialInvoices = await CommercialInvoice.find({
+      $or: [
+        { nftInfo: { $in: batchNFTIds } },
+        proofOfPharmacyIds.length > 0 ? { proofOfPharmacy: { $in: proofOfPharmacyIds } } : null,
+      ].filter(Boolean),
+    })
+      .populate("fromDistributor", "username email fullName walletAddress")
+      .populate("toPharmacy", "username email fullName walletAddress")
+      .sort({ createdAt: -1 });
+    
+    const commercialInvoice = commercialInvoices[0] || null;
 
     // Tạo chuỗi hành trình từ các thông tin đã tìm được
     const journey = [];
