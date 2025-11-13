@@ -44,59 +44,103 @@ export const trackDrugByNFTId = async (req, res) => {
       console.error("Lỗi khi lấy lịch sử blockchain:", error);
     }
 
-    // Tìm các invoice và proof liên quan trong supply chain
+    // Lấy production để có batchNumber
+    let production = null;
+    let batchNumber = nft.batchNumber;
+    if (nft.proofOfProduction) {
+      production = await ProofOfProduction.findById(nft.proofOfProduction);
+      if (production && production.batchNumber) {
+        batchNumber = production.batchNumber;
+      }
+    }
+
+    // Tìm tất cả NFT trong cùng batch để có thể tìm được các invoice/proof liên quan
+    let batchNFTIds = [nft._id];
+    if (batchNumber) {
+      const batchNFTs = await NFTInfo.find({ batchNumber }).select("_id");
+      batchNFTIds = batchNFTs.map(n => n._id);
+    }
+
+    // Tìm tất cả proofOfProduction trong cùng batch
+    let batchProductionIds = [];
+    if (nft.proofOfProduction) {
+      batchProductionIds.push(nft.proofOfProduction);
+    }
+    if (batchNumber) {
+      const batchProductions = await ProofOfProduction.find({ batchNumber }).select("_id");
+      batchProductionIds = [...batchProductionIds, ...batchProductions.map(p => p._id)];
+      batchProductionIds = [...new Set(batchProductionIds.map(id => id.toString()))];
+    }
+
+    // Tìm các invoice và proof liên quan trong supply chain (tìm theo batch)
     const manufacturerInvoice = await ManufacturerInvoice.findOne({
       $or: [
-        { nftInfo: nft._id },
-        nft.proofOfProduction ? { proofOfProduction: nft.proofOfProduction } : null,
+        { nftInfo: { $in: batchNFTIds } },
+        batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
       ].filter(Boolean),
     })
       .populate("fromManufacturer", "username email fullName walletAddress")
-      .populate("toDistributor", "username email fullName walletAddress");
+      .populate("toDistributor", "username email fullName walletAddress")
+      .sort({ createdAt: -1 });
 
     const proofOfDistribution = await ProofOfDistribution.findOne({
       $or: [
         manufacturerInvoice?._id ? { manufacturerInvoice: manufacturerInvoice._id } : null,
-        nft.proofOfProduction ? { proofOfProduction: nft.proofOfProduction } : null,
-        { nftInfo: nft._id },
+        batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
+        { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
     })
       .populate("fromManufacturer", "username email fullName")
-      .populate("toDistributor", "username email fullName");
+      .populate("toDistributor", "username email fullName")
+      .sort({ createdAt: -1 });
 
     const commercialInvoice = await CommercialInvoice.findOne({
       $or: [
-        { nftInfo: nft._id },
+        { nftInfo: { $in: batchNFTIds } },
         proofOfDistribution?._id ? { proofOfDistribution: proofOfDistribution._id } : null,
       ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName walletAddress")
-      .populate("toPharmacy", "username email fullName walletAddress");
+      .populate("toPharmacy", "username email fullName walletAddress")
+      .sort({ createdAt: -1 });
 
     const proofOfPharmacy = await ProofOfPharmacy.findOne({
       $or: [
         commercialInvoice?._id ? { commercialInvoice: commercialInvoice._id } : null,
-        { nftInfo: nft._id },
+        { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName")
-      .populate("toPharmacy", "username email fullName");
+      .populate("toPharmacy", "username email fullName")
+      .sort({ createdAt: -1 });
 
     // Tạo chuỗi hành trình từ các thông tin đã tìm được
     const journey = [];
     
-    if (nft.proofOfProduction) {
-      const production = await ProofOfProduction.findById(nft.proofOfProduction)
+    if (production) {
+      await production.populate("manufacturer", "name");
+      journey.push({
+        stage: "manufacturing",
+        description: "Sản xuất",
+        manufacturer: production.manufacturer?.name || "N/A",
+        date: production.mfgDate || production.createdAt,
+        details: {
+          quantity: production.quantity,
+          mfgDate: production.mfgDate,
+        },
+      });
+    } else if (nft.proofOfProduction) {
+      const productionData = await ProofOfProduction.findById(nft.proofOfProduction)
         .populate("manufacturer", "name");
-      if (production) {
+      if (productionData) {
         journey.push({
           stage: "manufacturing",
           description: "Sản xuất",
-          manufacturer: production.manufacturer?.name || "N/A",
-          date: production.mfgDate || production.createdAt,
+          manufacturer: productionData.manufacturer?.name || "N/A",
+          date: productionData.mfgDate || productionData.createdAt,
           details: {
-            quantity: production.quantity,
-            mfgDate: production.mfgDate,
+            quantity: productionData.quantity,
+            mfgDate: productionData.mfgDate,
           },
         });
       }
@@ -243,59 +287,103 @@ export const trackingDrugsInfo = async (req, res) => {
       console.error("Lỗi khi lấy lịch sử blockchain:", error);
     }
 
-    // Tìm các invoice và proof liên quan trong supply chain
+    // Lấy production để có batchNumber
+    let production = null;
+    let batchNumber = nft.batchNumber;
+    if (nft.proofOfProduction) {
+      production = await ProofOfProduction.findById(nft.proofOfProduction);
+      if (production && production.batchNumber) {
+        batchNumber = production.batchNumber;
+      }
+    }
+
+    // Tìm tất cả NFT trong cùng batch để có thể tìm được các invoice/proof liên quan
+    let batchNFTIds = [nft._id];
+    if (batchNumber) {
+      const batchNFTs = await NFTInfo.find({ batchNumber }).select("_id");
+      batchNFTIds = batchNFTs.map(n => n._id);
+    }
+
+    // Tìm tất cả proofOfProduction trong cùng batch
+    let batchProductionIds = [];
+    if (nft.proofOfProduction) {
+      batchProductionIds.push(nft.proofOfProduction);
+    }
+    if (batchNumber) {
+      const batchProductions = await ProofOfProduction.find({ batchNumber }).select("_id");
+      batchProductionIds = [...batchProductionIds, ...batchProductions.map(p => p._id)];
+      batchProductionIds = [...new Set(batchProductionIds.map(id => id.toString()))];
+    }
+
+    // Tìm các invoice và proof liên quan trong supply chain (tìm theo batch)
     const manufacturerInvoice = await ManufacturerInvoice.findOne({
       $or: [
-        { nftInfo: nft._id },
-        nft.proofOfProduction ? { proofOfProduction: nft.proofOfProduction } : null,
+        { nftInfo: { $in: batchNFTIds } },
+        batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
       ].filter(Boolean),
     })
       .populate("fromManufacturer", "username email fullName walletAddress")
-      .populate("toDistributor", "username email fullName walletAddress");
+      .populate("toDistributor", "username email fullName walletAddress")
+      .sort({ createdAt: -1 });
 
     const proofOfDistribution = await ProofOfDistribution.findOne({
       $or: [
         manufacturerInvoice?._id ? { manufacturerInvoice: manufacturerInvoice._id } : null,
-        nft.proofOfProduction ? { proofOfProduction: nft.proofOfProduction } : null,
-        { nftInfo: nft._id },
+        batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
+        { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
     })
       .populate("fromManufacturer", "username email fullName")
-      .populate("toDistributor", "username email fullName");
+      .populate("toDistributor", "username email fullName")
+      .sort({ createdAt: -1 });
 
     const commercialInvoice = await CommercialInvoice.findOne({
       $or: [
-        { nftInfo: nft._id },
+        { nftInfo: { $in: batchNFTIds } },
         proofOfDistribution?._id ? { proofOfDistribution: proofOfDistribution._id } : null,
       ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName walletAddress")
-      .populate("toPharmacy", "username email fullName walletAddress");
+      .populate("toPharmacy", "username email fullName walletAddress")
+      .sort({ createdAt: -1 });
 
     const proofOfPharmacy = await ProofOfPharmacy.findOne({
       $or: [
         commercialInvoice?._id ? { commercialInvoice: commercialInvoice._id } : null,
-        { nftInfo: nft._id },
+        { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
     })
       .populate("fromDistributor", "username email fullName")
-      .populate("toPharmacy", "username email fullName");
+      .populate("toPharmacy", "username email fullName")
+      .sort({ createdAt: -1 });
 
     // Tạo chuỗi hành trình từ các thông tin đã tìm được
     const journey = [];
     
-    if (nft.proofOfProduction) {
-      const production = await ProofOfProduction.findById(nft.proofOfProduction)
+    if (production) {
+      await production.populate("manufacturer", "name");
+      journey.push({
+        stage: "manufacturing",
+        description: "Sản xuất",
+        manufacturer: production.manufacturer?.name || "N/A",
+        date: production.mfgDate || production.createdAt,
+        details: {
+          quantity: production.quantity,
+          mfgDate: production.mfgDate,
+        },
+      });
+    } else if (nft.proofOfProduction) {
+      const productionData = await ProofOfProduction.findById(nft.proofOfProduction)
         .populate("manufacturer", "name");
-      if (production) {
+      if (productionData) {
         journey.push({
           stage: "manufacturing",
           description: "Sản xuất",
-          manufacturer: production.manufacturer?.name || "N/A",
-          date: production.mfgDate || production.createdAt,
+          manufacturer: productionData.manufacturer?.name || "N/A",
+          date: productionData.mfgDate || productionData.createdAt,
           details: {
-            quantity: production.quantity,
-            mfgDate: production.mfgDate,
+            quantity: productionData.quantity,
+            mfgDate: productionData.mfgDate,
           },
         });
       }
