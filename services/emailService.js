@@ -46,7 +46,7 @@ export const sendPasswordResetEmail = async (email, resetToken, resetUrl) => {
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background-color:rgb(76, 91, 175); color: white; padding: 20px; text-align: center; }
             .content { padding: 20px; background-color: #f9f9f9; }
-            .button { display: inline-block; padding: 12px 30px; background-color:rgb(39, 48, 223); color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 30px; background-color:rgb(101, 107, 232); color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { padding: 20px; text-align: center; color: #666; font-size: 12px; }
             .warning { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 20px 0; }
           </style>
@@ -66,7 +66,7 @@ export const sendPasswordResetEmail = async (email, resetToken, resetUrl) => {
               </p>
               
               <p>Hoặc copy và paste link này vào trình duyệt:</p>
-              <p style="word-break: break-all; color: #0066cc;">${resetUrl}</p>
+              <p style="word-break: break-all; color:rgb(91, 157, 223);">${resetUrl}</p>
               
               <div class="warning">
                 <strong>Lưu ý:</strong>

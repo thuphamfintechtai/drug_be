@@ -165,6 +165,11 @@ const CommercialInvoiceSchema = new mongoose.Schema(
       required: false,
       index: true,
     },
+    tokenIds: {
+      type: [String],
+      required: false,
+      default: [],
+    },
   },
   { timestamps: true }
 );

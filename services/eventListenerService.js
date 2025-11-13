@@ -212,8 +212,6 @@ export const listenToDistributorToPharmacyEvent = async () => {
           });
           await proofOfPharmacy.save();
         }
-
-        // Cập nhật NFT ownership và status
         const updateData = {
           $set: {
             owner: pharmacy._id,
@@ -225,7 +223,10 @@ export const listenToDistributorToPharmacyEvent = async () => {
         }
 
         await NFTInfo.updateMany(
-          { tokenId: { $in: tokenIdStrings } },
+          { 
+            tokenId: { $in: tokenIdStrings },
+            status: "transferred", // Chỉ cập nhật những NFT đã được chuyển từ manufacturer
+          },
           updateData
         );
 
@@ -235,7 +236,7 @@ export const listenToDistributorToPharmacyEvent = async () => {
         console.log("- Transaction Hash:", transactionHash || "KHÔNG TÌM THẤY");
         
         if (!transactionHash) {
-          console.warn("⚠️ Cảnh báo: Transaction hash không có trong event. Kiểm tra các trường hash trong event log.");
+          console.warn("Cảnh báo: Transaction hash không có trong event. Kiểm tra các trường hash trong event log.");
           const safeSummary = {
             hasLogObject: !!eventLog?.log,
             logTxHash: eventLog?.log?.transactionHash,
@@ -413,8 +414,12 @@ export const syncPastEvents = async (fromBlock = 0, toBlock = "latest") => {
           await proofOfPharmacy.save();
         }
 
+        // Chỉ cập nhật những NFT có status = "transferred" (đã được chuyển từ manufacturer)
         await NFTInfo.updateMany(
-          { tokenId: { $in: tokenIdStrings } },
+          { 
+            tokenId: { $in: tokenIdStrings },
+            status: "transferred", // Chỉ cập nhật những NFT đã được chuyển từ manufacturer
+          },
           {
             $set: {
               owner: pharmacy._id,

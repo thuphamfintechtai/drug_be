@@ -667,6 +667,7 @@ export const transferToDistributor = async (req, res) => {
       finalAmount,
       notes,
       batchNumber: batchNumber,
+      tokenIds: tokenIds, // Lưu danh sách tokenIds được chuyển giao
       status: "pending", // Chờ frontend gọi smart contract
     });
 
@@ -797,10 +798,24 @@ export const saveTransferTransaction = async (req, res) => {
       chainTxHash: manufacturerInvoice.chainTxHash,
     });
 
-    // Cập nhật trạng thái NFT (bao gồm chainTxHash để có thể tìm lại sau này)
-    console.log("[saveTransferTransaction] Đang cập nhật NFT...");
+    // Cập nhật trạng thái NFT (chỉ những NFT trong tokenIds của invoice)
+    // Đảm bảo chỉ cập nhật những NFT thực sự được chuyển giao
+    const invoiceTokenIds = manufacturerInvoice.tokenIds && manufacturerInvoice.tokenIds.length > 0 
+      ? manufacturerInvoice.tokenIds 
+      : tokenIds;
+    
+    console.log("[saveTransferTransaction] Đang cập nhật NFT...", {
+      invoiceTokenIdsCount: invoiceTokenIds.length,
+      requestTokenIdsCount: tokenIds.length,
+    });
+    
+    // Chỉ cập nhật những NFT có tokenId trong danh sách invoice và có status = "minted"
     const updateResult = await NFTInfo.updateMany(
-      { tokenId: { $in: tokenIds } },
+      { 
+        tokenId: { $in: invoiceTokenIds },
+        status: "minted", // Chỉ cập nhật những NFT chưa được chuyển
+        owner: user._id, // Đảm bảo NFT thuộc về manufacturer
+      },
       {
         $set: {
           status: "transferred",
@@ -1414,45 +1429,58 @@ export const approveDistribution = async (req, res) => {
     }
 
     // Lấy tokenIds từ NFTInfo
-    // Có thể tìm theo nhiều cách:
-    // 1. Theo chainTxHash (nếu đã được lưu trong saveTransferTransaction)
-    // 2. Theo proofOfProduction (nếu có)
-    // 3. Theo owner và status (nếu đã được transferred)
+    // Ưu tiên: Tìm theo tokenIds trong invoice (chính xác nhất)
+    // Fallback: Tìm theo chainTxHash hoặc proofOfProduction
     
     console.log("[approveDistribution] Bắt đầu tìm NFT...");
     let nftInfos = [];
     
-    // Thử 1: Tìm theo chainTxHash (nếu đã được lưu)
-    if (invoice.chainTxHash) {
-      console.log("[approveDistribution]  Thử 1: Tìm theo chainTxHash:", invoice.chainTxHash);
-      nftInfos = await NFTInfo.find({
-        chainTxHash: invoice.chainTxHash,
+    // Ưu tiên 1: Tìm theo tokenIds trong invoice (chính xác nhất - chỉ những NFT được chuyển giao)
+    if (invoice.tokenIds && Array.isArray(invoice.tokenIds) && invoice.tokenIds.length > 0) {
+      console.log("[approveDistribution]  Ưu tiên 1: Tìm theo tokenIds từ invoice:", {
+        tokenIdsCount: invoice.tokenIds.length,
+        tokenIds: invoice.tokenIds.slice(0, 5),
       });
-      console.log("[approveDistribution] Thử 1 - Kết quả:", {
+      nftInfos = await NFTInfo.find({
+        tokenId: { $in: invoice.tokenIds },
+      });
+      console.log("[approveDistribution] Ưu tiên 1 - Kết quả:", {
         found: nftInfos.length,
         tokenIds: nftInfos.map(nft => nft.tokenId),
       });
     }
     
-    // Thử 2: Nếu không tìm thấy, thử tìm theo proofOfProduction
+    // Fallback 1: Tìm theo chainTxHash (nếu không có tokenIds trong invoice)
+    if (nftInfos.length === 0 && invoice.chainTxHash) {
+      console.log("[approveDistribution]  Fallback 1: Tìm theo chainTxHash:", invoice.chainTxHash);
+      nftInfos = await NFTInfo.find({
+        chainTxHash: invoice.chainTxHash,
+      });
+      console.log("[approveDistribution] Fallback 1 - Kết quả:", {
+        found: nftInfos.length,
+        tokenIds: nftInfos.map(nft => nft.tokenId),
+      });
+    }
+    
+    // Fallback 2: Nếu không tìm thấy, thử tìm theo proofOfProduction
     if (nftInfos.length === 0 && distribution.proofOfProduction) {
       const proofOfProductionId = distribution.proofOfProduction._id || distribution.proofOfProduction;
-      console.log("[approveDistribution]  Thử 2: Tìm theo proofOfProduction:", proofOfProductionId);
+      console.log("[approveDistribution]  Fallback 2: Tìm theo proofOfProduction:", proofOfProductionId);
       nftInfos = await NFTInfo.find({
         proofOfProduction: proofOfProductionId,
         status: { $in: ["transferred", "minted"] },
       });
-      console.log("[approveDistribution] Thử 2 - Kết quả:", {
+      console.log("[approveDistribution] Fallback 2 - Kết quả:", {
         found: nftInfos.length,
         tokenIds: nftInfos.map(nft => nft.tokenId),
       });
     }
     
-    // Thử 3: Nếu vẫn không tìm thấy, tìm theo owner (distributor) và status transferred
+    // Fallback 3: Nếu vẫn không tìm thấy, tìm theo owner (distributor) và status transferred
     // (NFT đã được transferred cho distributor này)
     if (nftInfos.length === 0) {
       const distributorId = distribution.toDistributor._id || distribution.toDistributor;
-      console.log("[approveDistribution]  Thử 3: Tìm theo owner (distributor) và status transferred:", {
+      console.log("[approveDistribution]  Fallback 3: Tìm theo owner (distributor) và status transferred:", {
         distributorId,
         limit: distribution.distributedQuantity || 100,
       });
@@ -1460,7 +1488,7 @@ export const approveDistribution = async (req, res) => {
         owner: distributorId,
         status: "transferred",
       }).limit(distribution.distributedQuantity || 100);
-      console.log("[approveDistribution] Thử 3 - Kết quả:", {
+      console.log("[approveDistribution] Fallback 3 - Kết quả:", {
         found: nftInfos.length,
         tokenIds: nftInfos.map(nft => nft.tokenId),
         sampleNFTs: nftInfos.slice(0, 3).map(nft => ({
@@ -1469,21 +1497,6 @@ export const approveDistribution = async (req, res) => {
           status: nft.status,
           chainTxHash: nft.chainTxHash,
         })),
-      });
-    }
-    
-    // Nếu vẫn không tìm thấy, thử tìm theo invoice (nếu có lưu tokenIds trong invoice)
-    if (nftInfos.length === 0 && invoice.tokenIds && Array.isArray(invoice.tokenIds) && invoice.tokenIds.length > 0) {
-      console.log("[approveDistribution]  Thử 4: Tìm theo tokenIds từ invoice:", {
-        tokenIdsCount: invoice.tokenIds.length,
-        tokenIds: invoice.tokenIds.slice(0, 5),
-      });
-      nftInfos = await NFTInfo.find({
-        tokenId: { $in: invoice.tokenIds },
-      });
-      console.log("[approveDistribution] Thử 4 - Kết quả:", {
-        found: nftInfos.length,
-        tokenIds: nftInfos.map(nft => nft.tokenId),
       });
     }
     
@@ -1535,19 +1548,29 @@ export const approveDistribution = async (req, res) => {
       })),
     });
 
-    const tokenIds = nftInfos.map(nft => nft.tokenId);
+    // Chỉ lấy tokenIds từ invoice nếu có (chính xác nhất)
+    // Nếu không có, dùng tokenIds từ nftInfos đã tìm được
+    const invoiceTokenIds = invoice.tokenIds && invoice.tokenIds.length > 0 
+      ? invoice.tokenIds 
+      : nftInfos.map(nft => nft.tokenId);
+    
     const distributorId = distribution.toDistributor._id || distribution.toDistributor;
 
     console.log("[approveDistribution] Cập nhật NFT:", {
-      tokenIdsCount: tokenIds.length,
+      invoiceTokenIdsCount: invoiceTokenIds.length,
+      nftInfosCount: nftInfos.length,
       distributorId,
-      tokenIds: tokenIds.slice(0, 5),
+      tokenIds: invoiceTokenIds.slice(0, 5),
     });
 
     // Cập nhật NFT owner và đảm bảo status = "transferred"
+    // Chỉ cập nhật những NFT trong danh sách tokenIds của invoice
     // (NFT đã được transferred trên blockchain, giờ chỉ cần cập nhật owner trong DB)
     const updateResult = await NFTInfo.updateMany(
-      { tokenId: { $in: tokenIds } },
+      { 
+        tokenId: { $in: invoiceTokenIds },
+        status: { $in: ["minted", "transferred"] }, // Chỉ cập nhật những NFT chưa được chuyển hoặc đã chuyển
+      },
       {
         $set: {
           owner: distributorId,

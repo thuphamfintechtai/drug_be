@@ -399,6 +399,7 @@ export const transferToPharmacy = async (req, res) => {
       notes,
       deliveryAddress,
       batchNumber: batchNumber,
+      tokenIds: tokenIds, // Lưu danh sách tokenIds được chuyển giao
       status: "draft", // Chờ frontend gọi smart contract
     });
 
@@ -561,10 +562,24 @@ export const saveTransferToPharmacyTransaction = async (req, res) => {
       chainTxHash: commercialInvoice.chainTxHash,
     });
 
-    // Cập nhật trạng thái NFT
-    console.log("[saveTransferToPharmacyTransaction] Đang cập nhật NFT...");
+    // Cập nhật trạng thái NFT (chỉ những NFT trong tokenIds của invoice)
+    // Đảm bảo chỉ cập nhật những NFT thực sự được chuyển giao
+    const invoiceTokenIds = commercialInvoice.tokenIds && commercialInvoice.tokenIds.length > 0 
+      ? commercialInvoice.tokenIds 
+      : tokenIds;
+    
+    console.log("[saveTransferToPharmacyTransaction] Đang cập nhật NFT...", {
+      invoiceTokenIdsCount: invoiceTokenIds.length,
+      requestTokenIdsCount: tokenIds.length,
+    });
+    
+    // Chỉ cập nhật những NFT có tokenId trong danh sách invoice và có status = "transferred"
     const updateResult = await NFTInfo.updateMany(
-      { tokenId: { $in: tokenIds } },
+      { 
+        tokenId: { $in: invoiceTokenIds },
+        status: "transferred", // Chỉ cập nhật những NFT đã được chuyển từ manufacturer
+        owner: user._id, // Đảm bảo NFT thuộc về distributor
+      },
       {
         $set: {
           status: "sold",
