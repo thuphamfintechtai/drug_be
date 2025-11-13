@@ -134,6 +134,11 @@ const ProofOfDistributionSchema = new mongoose.Schema(
       ref: "User",
       required: false,
     },
+    batchNumber: {
+      type: String,
+      required: false,
+      index: true,
+    },
   },
   { timestamps: true }
 );

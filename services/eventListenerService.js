@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import CommercialInvoice from "../models/CommercialInvoice.js";
 import ProofOfPharmacy from "../models/ProofOfPharmacy.js";
+import ProofOfProduction from "../models/ProofOfProduction.js";
 import NFTInfo from "../models/NFTInfo.js";
 import User from "../models/User.js";
 
@@ -146,16 +147,33 @@ export const listenToDistributorToPharmacyEvent = async () => {
             proofOfPharmacy.completedAt = transferDate;
             await proofOfPharmacy.save();
           } else {
+            // Lấy batchNumber từ commercialInvoice hoặc NFT
+            let batchNumber = commercialInvoice.batchNumber;
+            if (!batchNumber && commercialInvoice.nftInfo) {
+              const nft = await NFTInfo.findById(commercialInvoice.nftInfo);
+              if (nft) {
+                batchNumber = nft.batchNumber;
+                if (!batchNumber && nft.proofOfProduction) {
+                  const production = await ProofOfProduction.findById(nft.proofOfProduction);
+                  if (production) {
+                    batchNumber = production.batchNumber;
+                  }
+                }
+              }
+            }
+            
             // Tạo mới ProofOfPharmacy nếu chưa có
             proofOfPharmacy = new ProofOfPharmacy({
               fromDistributor: distributor._id,
               toPharmacy: pharmacy._id,
               commercialInvoice: commercialInvoice._id,
+              nftInfo: commercialInvoice.nftInfo,
               receiptTxHash: transactionHash,
               status: "received",
               supplyChainCompleted: true,
               completedAt: transferDate,
               receiptDate: transferDate,
+              batchNumber: batchNumber,
             });
             await proofOfPharmacy.save();
 
@@ -169,14 +187,28 @@ export const listenToDistributorToPharmacyEvent = async () => {
           }
         } else {
           console.warn("Không tìm thấy CommercialInvoice liên quan, tạo ProofOfPharmacy mới");
+          // Lấy batchNumber từ NFT nếu có
+          let batchNumber = null;
+          if (nfts.length > 0) {
+            batchNumber = nfts[0].batchNumber;
+            if (!batchNumber && nfts[0].proofOfProduction) {
+              const production = await ProofOfProduction.findById(nfts[0].proofOfProduction);
+              if (production) {
+                batchNumber = production.batchNumber;
+              }
+            }
+          }
+          
           proofOfPharmacy = new ProofOfPharmacy({
             fromDistributor: distributor._id,
             toPharmacy: pharmacy._id,
+            nftInfo: nfts.length > 0 ? nfts[0]._id : null,
             receiptTxHash: transactionHash,
             status: "received",
             supplyChainCompleted: true,
             completedAt: transferDate,
             receiptDate: transferDate,
+            batchNumber: batchNumber,
           });
           await proofOfPharmacy.save();
         }
@@ -317,15 +349,32 @@ export const syncPastEvents = async (fromBlock = 0, toBlock = "latest") => {
           });
 
           if (!proofOfPharmacy) {
+            // Lấy batchNumber từ commercialInvoice hoặc NFT
+            let batchNumber = commercialInvoice.batchNumber;
+            if (!batchNumber && commercialInvoice.nftInfo) {
+              const nft = await NFTInfo.findById(commercialInvoice.nftInfo);
+              if (nft) {
+                batchNumber = nft.batchNumber;
+                if (!batchNumber && nft.proofOfProduction) {
+                  const production = await ProofOfProduction.findById(nft.proofOfProduction);
+                  if (production) {
+                    batchNumber = production.batchNumber;
+                  }
+                }
+              }
+            }
+            
             proofOfPharmacy = new ProofOfPharmacy({
               fromDistributor: distributor._id,
               toPharmacy: pharmacy._id,
               commercialInvoice: commercialInvoice._id,
+              nftInfo: commercialInvoice.nftInfo,
               receiptTxHash: event.transactionHash,
               status: "received",
               supplyChainCompleted: true,
               completedAt: transferDate,
               receiptDate: transferDate,
+              batchNumber: batchNumber,
             });
             await proofOfPharmacy.save();
 
@@ -335,14 +384,31 @@ export const syncPastEvents = async (fromBlock = 0, toBlock = "latest") => {
             await commercialInvoice.save();
           }
         } else {
+          // Lấy batchNumber từ NFT nếu có
+          let batchNumber = null;
+          const nfts = await NFTInfo.find({
+            tokenId: { $in: tokenIdStrings },
+          });
+          if (nfts.length > 0) {
+            batchNumber = nfts[0].batchNumber;
+            if (!batchNumber && nfts[0].proofOfProduction) {
+              const production = await ProofOfProduction.findById(nfts[0].proofOfProduction);
+              if (production) {
+                batchNumber = production.batchNumber;
+              }
+            }
+          }
+          
           proofOfPharmacy = new ProofOfPharmacy({
             fromDistributor: distributor._id,
             toPharmacy: pharmacy._id,
+            nftInfo: nfts.length > 0 ? nfts[0]._id : null,
             receiptTxHash: event.transactionHash,
             status: "received",
             supplyChainCompleted: true,
             completedAt: transferDate,
             receiptDate: transferDate,
+            batchNumber: batchNumber,
           });
           await proofOfPharmacy.save();
         }

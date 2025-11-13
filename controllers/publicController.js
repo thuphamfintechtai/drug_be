@@ -98,6 +98,7 @@ export const trackDrugByNFTId = async (req, res) => {
     // Tìm tất cả, không chỉ findOne để có thể tìm được nhiều hơn
     const manufacturerInvoices = await ManufacturerInvoice.find({
       $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
         { nftInfo: { $in: batchNFTIds } },
         batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
       ].filter(Boolean),
@@ -111,6 +112,7 @@ export const trackDrugByNFTId = async (req, res) => {
 
     const proofOfDistributions = await ProofOfDistribution.find({
       $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
         manufacturerInvoiceIds.length > 0 ? { manufacturerInvoice: { $in: manufacturerInvoiceIds } } : null,
         batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
         { nftInfo: { $in: batchNFTIds } },
@@ -126,6 +128,7 @@ export const trackDrugByNFTId = async (req, res) => {
     // Tìm ProofOfPharmacy có proofOfDistribution hoặc nftInfo trong batch
     const proofOfPharmacies = await ProofOfPharmacy.find({
       $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
         proofOfDistributionIds.length > 0 ? { proofOfDistribution: { $in: proofOfDistributionIds } } : null,
         { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
@@ -140,6 +143,7 @@ export const trackDrugByNFTId = async (req, res) => {
     // Tìm CommercialInvoice qua nftInfo hoặc proofOfPharmacy
     const commercialInvoices = await CommercialInvoice.find({
       $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
         { nftInfo: { $in: batchNFTIds } },
         proofOfPharmacyIds.length > 0 ? { proofOfPharmacy: { $in: proofOfPharmacyIds } } : null,
       ].filter(Boolean),
@@ -377,6 +381,7 @@ export const trackingDrugsInfo = async (req, res) => {
     // Tìm tất cả, không chỉ findOne để có thể tìm được nhiều hơn
     const manufacturerInvoices = await ManufacturerInvoice.find({
       $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
         { nftInfo: { $in: batchNFTIds } },
         batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
       ].filter(Boolean),
@@ -390,6 +395,7 @@ export const trackingDrugsInfo = async (req, res) => {
 
     const proofOfDistributions = await ProofOfDistribution.find({
       $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
         manufacturerInvoiceIds.length > 0 ? { manufacturerInvoice: { $in: manufacturerInvoiceIds } } : null,
         batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
         { nftInfo: { $in: batchNFTIds } },
@@ -405,6 +411,7 @@ export const trackingDrugsInfo = async (req, res) => {
     // Tìm ProofOfPharmacy có proofOfDistribution hoặc nftInfo trong batch
     const proofOfPharmacies = await ProofOfPharmacy.find({
       $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
         proofOfDistributionIds.length > 0 ? { proofOfDistribution: { $in: proofOfDistributionIds } } : null,
         { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
@@ -419,6 +426,7 @@ export const trackingDrugsInfo = async (req, res) => {
     // Tìm CommercialInvoice qua nftInfo hoặc proofOfPharmacy
     const commercialInvoices = await CommercialInvoice.find({
       $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
         { nftInfo: { $in: batchNFTIds } },
         proofOfPharmacyIds.length > 0 ? { proofOfPharmacy: { $in: proofOfPharmacyIds } } : null,
       ].filter(Boolean),

@@ -160,6 +160,11 @@ const CommercialInvoiceSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    batchNumber: {
+      type: String,
+      required: false,
+      index: true,
+    },
   },
   { timestamps: true }
 );

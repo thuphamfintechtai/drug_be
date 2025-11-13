@@ -204,6 +204,21 @@ export const confirmReceipt = async (req, res) => {
     } else {
       console.log("[confirmReceipt] Tạo mới Proof of Pharmacy");
       
+      // Lấy batchNumber từ invoice
+      let batchNumber = invoice.batchNumber;
+      if (!batchNumber && invoice.nftInfo) {
+        const nft = await NFTInfo.findById(invoice.nftInfo);
+        if (nft) {
+          batchNumber = nft.batchNumber;
+          if (!batchNumber && nft.proofOfProduction) {
+            const production = await ProofOfProduction.findById(nft.proofOfProduction);
+            if (production) {
+              batchNumber = production.batchNumber;
+            }
+          }
+        }
+      }
+      
       const proofData = {
         fromDistributor: invoice.fromDistributor._id,
         toPharmacy: user._id,
@@ -216,6 +231,7 @@ export const confirmReceipt = async (req, res) => {
         receivedQuantity: receivedQuantity || invoice.quantity,
         drug: invoice.drug,
         nftInfo: invoice.nftInfo,
+        batchNumber: batchNumber,
       };
 
       console.log("[confirmReceipt] Dữ liệu Proof of Pharmacy mới:", {

@@ -152,6 +152,11 @@ const ProofOfPharmacySchema = new mongoose.Schema(
       type: Date,
       required: false,
     },
+    batchNumber: {
+      type: String,
+      required: false,
+      index: true,
+    },
   },
   { timestamps: true }
 );

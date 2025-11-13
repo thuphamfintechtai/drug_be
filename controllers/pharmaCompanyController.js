@@ -637,11 +637,26 @@ export const transferToDistributor = async (req, res) => {
 
     const nftInfos = nftValidation.nfts;
 
+    // Lấy batchNumber từ NFT đầu tiên hoặc từ proofOfProduction
+    let batchNumber = null;
+    if (nftInfos.length > 0) {
+      batchNumber = nftInfos[0].batchNumber;
+      // Nếu không có batchNumber trong NFT, lấy từ proofOfProduction
+      if (!batchNumber && nftInfos[0].proofOfProduction) {
+        const production = await ProofOfProduction.findById(nftInfos[0].proofOfProduction);
+        if (production) {
+          batchNumber = production.batchNumber;
+        }
+      }
+    }
+
     // Lưu vào database với trạng thái pending (chờ frontend gọi smart contract)
     // Frontend sẽ gọi smart contract trực tiếp, sau đó backend lắng nghe event để cập nhật
     const manufacturerInvoice = new ManufacturerInvoice({
       fromManufacturer: user._id,
       toDistributor: distributor.user._id,
+      nftInfo: nftInfos[0]?._id,
+      proofOfProduction: nftInfos[0]?.proofOfProduction,
       invoiceNumber: invoiceNumber || `INV-${Date.now()}`,
       invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
       quantity: quantity || amounts.reduce((sum, amt) => sum + amt, 0),
@@ -651,6 +666,7 @@ export const transferToDistributor = async (req, res) => {
       vatAmount,
       finalAmount,
       notes,
+      batchNumber: batchNumber,
       status: "pending", // Chờ frontend gọi smart contract
     });
 

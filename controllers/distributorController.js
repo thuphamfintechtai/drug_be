@@ -166,6 +166,26 @@ export const confirmReceipt = async (req, res) => {
       });
     }
 
+    // Lấy batchNumber từ invoice
+    let batchNumber = invoice.batchNumber;
+    if (!batchNumber && invoice.nftInfo) {
+      const nft = await NFTInfo.findById(invoice.nftInfo);
+      if (nft) {
+        batchNumber = nft.batchNumber;
+        if (!batchNumber && nft.proofOfProduction) {
+          const production = await ProofOfProduction.findById(nft.proofOfProduction);
+          if (production) {
+            batchNumber = production.batchNumber;
+          }
+        }
+      }
+    } else if (!batchNumber && invoice.proofOfProduction) {
+      const production = await ProofOfProduction.findById(invoice.proofOfProduction);
+      if (production) {
+        batchNumber = production.batchNumber;
+      }
+    }
+
     // Tìm hoặc tạo Proof of Distribution
     let proofOfDistribution = await ProofOfDistribution.findOne({
       manufacturerInvoice: invoiceId,
@@ -179,12 +199,15 @@ export const confirmReceipt = async (req, res) => {
       if (notes) proofOfDistribution.notes = notes;
       if (distributionDate) proofOfDistribution.distributionDate = new Date(distributionDate);
       if (distributedQuantity) proofOfDistribution.distributedQuantity = distributedQuantity;
+      if (batchNumber) proofOfDistribution.batchNumber = batchNumber;
     } else {
       // Tạo mới proof of distribution
       proofOfDistribution = new ProofOfDistribution({
         fromManufacturer: invoice.fromManufacturer._id,
         toDistributor: user._id,
         manufacturerInvoice: invoiceId,
+        proofOfProduction: invoice.proofOfProduction,
+        nftInfo: invoice.nftInfo,
         status: "confirmed", // Đang chờ Manufacture xác nhận
         receivedBy,
         deliveryAddress,
@@ -192,6 +215,7 @@ export const confirmReceipt = async (req, res) => {
         notes,
         distributionDate: distributionDate ? new Date(distributionDate) : new Date(),
         distributedQuantity: distributedQuantity || invoice.quantity,
+        batchNumber: batchNumber,
       });
     }
 
@@ -343,6 +367,19 @@ export const transferToPharmacy = async (req, res) => {
     const drugId = nftInfos[0].drug;
     console.log("[transferToPharmacy] Drug ID từ NFT:", drugId);
 
+    // Lấy batchNumber từ NFT đầu tiên hoặc từ proofOfProduction
+    let batchNumber = null;
+    if (nftInfos.length > 0) {
+      batchNumber = nftInfos[0].batchNumber;
+      // Nếu không có batchNumber trong NFT, lấy từ proofOfProduction
+      if (!batchNumber && nftInfos[0].proofOfProduction) {
+        const production = await ProofOfProduction.findById(nftInfos[0].proofOfProduction);
+        if (production) {
+          batchNumber = production.batchNumber;
+        }
+      }
+    }
+
     // Tạo Commercial Invoice với trạng thái draft (chờ frontend gọi smart contract)
     const calculatedQuantity = quantity || amounts.reduce((sum, amt) => sum + amt, 0);
     console.log("[transferToPharmacy] Tạo Commercial Invoice...");
@@ -350,6 +387,7 @@ export const transferToPharmacy = async (req, res) => {
       fromDistributor: user._id,
       toPharmacy: pharmacy.user._id,
       drug: drugId,
+      nftInfo: nftInfos[0]?._id,
       invoiceNumber: invoiceNumber || `CI-${Date.now()}`,
       invoiceDate: invoiceDate ? new Date(invoiceDate) : new Date(),
       quantity: calculatedQuantity,
@@ -360,6 +398,7 @@ export const transferToPharmacy = async (req, res) => {
       finalAmount,
       notes,
       deliveryAddress,
+      batchNumber: batchNumber,
       status: "draft", // Chờ frontend gọi smart contract
     });
 
@@ -379,10 +418,12 @@ export const transferToPharmacy = async (req, res) => {
       fromDistributor: user._id,
       toPharmacy: pharmacy.user._id,
       drug: drugId,
+      nftInfo: nftInfos[0]?._id,
       receiptDate: invoiceDate ? new Date(invoiceDate) : new Date(),
       receivedQuantity: calculatedQuantity,
       status: "pending", // Đang chờ
       commercialInvoice: commercialInvoice._id,
+      batchNumber: batchNumber,
     });
 
     await proofOfPharmacy.save();
