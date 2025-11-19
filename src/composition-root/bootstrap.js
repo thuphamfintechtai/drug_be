@@ -4,10 +4,12 @@ import { InMemoryEventBus } from "../shared-kernel/infrastructure/event-bus/InMe
 
 // Identity-Access imports
 import { UserRepository } from "../bounded-contexts/identity-access/infrastructure/persistence/mongoose/UserRepository.js";
+import { PasswordResetRepository } from "../bounded-contexts/identity-access/infrastructure/persistence/mongoose/PasswordResetRepository.js";
 import { JwtTokenService } from "../bounded-contexts/identity-access/infrastructure/security/JwtTokenService.js";
 import { PasswordHasher } from "../bounded-contexts/identity-access/infrastructure/security/PasswordHasher.js";
 import { AuthenticationApplicationService } from "../bounded-contexts/identity-access/application/services/AuthenticationApplicationService.js";
 import { UserManagementApplicationService } from "../bounded-contexts/identity-access/application/services/UserManagementApplicationService.js";
+import { PasswordResetApplicationService } from "../bounded-contexts/identity-access/application/services/PasswordResetApplicationService.js";
 import { AuthController } from "../bounded-contexts/identity-access/presentation/controllers/AuthController.js";
 import { UserController } from "../bounded-contexts/identity-access/presentation/controllers/UserController.js";
 import { createAuthRoutes } from "../bounded-contexts/identity-access/presentation/routes/authRoutes.js";
@@ -82,14 +84,15 @@ export class ApplicationBootstrap {
     // Connect to database
     await connectDatabase();
 
-    // Initialize middleware with dependencies
-    await this.initializeMiddleware();
-
-    // Register infrastructure services
+    // Register infrastructure services first
     this.container.register("eventBus", () => this.eventBus, true);
     this.container.register("userRepository", () => new UserRepository(), true);
+    this.container.register("passwordResetRepository", () => new PasswordResetRepository(), true);
     this.container.register("jwtService", () => new JwtTokenService(appConfig.jwtSecret, appConfig.jwtExpiresIn), true);
     this.container.register("passwordHasher", () => new PasswordHasher(), true);
+
+    // Initialize middleware with dependencies (after services are registered)
+    await this.initializeMiddleware();
 
     // Registration infrastructure
     this.container.register("registrationRequestRepository", () => new RegistrationRequestRepository(), true);
@@ -150,7 +153,7 @@ export class ApplicationBootstrap {
           c.resolve("jwtService"),
           c.resolve("eventBus"),
           c.resolve("businessEntityService"), // businessEntityService
-          null  // passwordResetRepository - to be implemented
+          c.resolve("passwordResetRepository")  // passwordResetRepository
         ),
       true
     );
@@ -161,6 +164,19 @@ export class ApplicationBootstrap {
         new UserManagementApplicationService(
           c.resolve("userRepository"),
           c.resolve("businessEntityService")
+        ),
+      true
+    );
+
+    // Password Reset application service
+    this.container.register(
+      "passwordResetService",
+      (c) =>
+        new PasswordResetApplicationService(
+          c.resolve("userRepository"),
+          c.resolve("passwordResetRepository"),
+          null, // emailService - to be injected if needed
+          c.resolve("eventBus")
         ),
       true
     );
@@ -188,6 +204,7 @@ export class ApplicationBootstrap {
       (c) =>
         new DrugManagementApplicationService(
           c.resolve("drugInfoRepository"),
+          c.resolve("nftRepository"), // Inject nftRepository for checking NFT usage
           c.resolve("eventBus")
         ),
       true
@@ -286,7 +303,7 @@ export class ApplicationBootstrap {
         new AuthController(
           c.resolve("authenticationService"),
           c.resolve("userManagementService"),
-          null // passwordResetService - to be implemented
+          c.resolve("passwordResetService") // passwordResetService
         ),
       true
     );
