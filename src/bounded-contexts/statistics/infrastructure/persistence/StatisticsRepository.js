@@ -2,46 +2,66 @@ import { IStatisticsRepository } from "../../domain/repositories/IStatisticsRepo
 
 export class StatisticsRepository extends IStatisticsRepository {
   async getDashboardStats(userId, role, filters) {
-    // Sử dụng StatisticsFactory cũ cho đến khi migrate hoàn toàn
-    const user = { _id: userId, role };
-    const strategy = await StatisticsFactory.createStrategyWithRoleValidation(user, role);
-    return await strategy.getDashboard();
+    // TODO: Implement dashboard stats using DDD repositories
+    // Temporary: return empty stats
+    return {
+      total: 0,
+      byStatus: {},
+      byType: {},
+    };
   }
 
   async getSupplyChainStats(userId, role, filters) {
-    const user = { _id: userId, role };
-    const strategy = await StatisticsFactory.createStrategyWithRoleValidation(user, role);
-    return await strategy.getSupplyChainStats();
+    // TODO: Implement supply chain stats using DDD repositories
+    // Temporary: return empty stats
+    return {
+      total: 0,
+      byStatus: {},
+    };
   }
 
   async getAlertsStats(userId, role, filters) {
-    const user = { _id: userId, role };
-    const strategy = await StatisticsFactory.createStrategyWithRoleValidation(user, role);
-    return await strategy.getAlertsStats();
+    // TODO: Implement alerts stats using DDD repositories
+    // Temporary: return empty stats
+    return {
+      total: 0,
+      byType: {},
+    };
   }
 
   async getBlockchainStats(userId, role, filters) {
-    const user = { _id: userId, role };
-    const strategy = await StatisticsFactory.createStrategyWithRoleValidation(user, role);
-    return await strategy.getBlockchainStats();
+    // TODO: Implement blockchain stats using DDD repositories
+    // Temporary: return empty stats
+    return {
+      total: 0,
+      byStatus: {},
+    };
   }
 
   async getMonthlyTrends(userId, role, months, filters) {
-    const user = { _id: userId, role };
-    const strategy = await StatisticsFactory.createStrategyWithRoleValidation(user, role);
-    return await strategy.getMonthlyTrends(months);
+    // TODO: Implement monthly trends using DDD repositories
+    // Temporary: return empty trends
+    return {
+      data: [],
+      labels: [],
+    };
   }
 
   async getPerformanceMetrics(userId, role, startDate, endDate, filters) {
-    const user = { _id: userId, role };
-    const strategy = await StatisticsFactory.createStrategyWithRoleValidation(user, role);
-    return await strategy.getPerformanceMetrics(startDate, endDate);
+    // TODO: Implement performance metrics using DDD repositories
+    // Temporary: return empty metrics
+    return {
+      metrics: {},
+    };
   }
 
   async getComplianceStats(userId, role, filters) {
-    const user = { _id: userId, role };
-    const strategy = await StatisticsFactory.createStrategyWithRoleValidation(user, role);
-    return await strategy.getComplianceStats();
+    // TODO: Implement compliance stats using DDD repositories
+    // Temporary: return empty stats
+    return {
+      total: 0,
+      byStatus: {},
+    };
   }
 }
 
