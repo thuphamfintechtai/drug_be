@@ -1,22 +1,22 @@
 {
   "watch": [
+    "src",
     "controllers",
     "services",
     "models",
     "routes",
     "utils",
-    "middleware",
-    "index.js",
-    "config"
+    "middleware"
   ],
   "ext": "js,json",
   "ignore": [
     "node_modules",
     "*.test.js",
     "*.spec.js",
-    "coverage"
+    "coverage",
+    "tests"
   ],
-  "exec": "node index.js",
+  "exec": "node src/index.js",
   "env": {
     "NODE_ENV": "development"
   },
