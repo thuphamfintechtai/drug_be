@@ -1,4 +1,4 @@
-import { BusinessEntityFactory } from "../infrastructure/persistence/BusinessEntityFactory.js";
+import { BusinessEntityFactory } from "../../infrastructure/persistence/BusinessEntityFactory.js";
 
 /**
  * Application service for business entity operations
@@ -26,27 +26,15 @@ export class BusinessEntityService {
     }
 
     try {
-      // Get business entity using old BusinessEntityFactory from services
-      // This uses the old Mongoose models
-      const BusinessEntityFactoryOld = (await import("../../../../services/factories/BusinessEntityFactory.js")).BusinessEntityFactory;
-      
-      // Convert domain user to plain object for old factory
-      const userObj = {
-        _id: user.id,
-        role: user.role,
-        pharmaCompany: user.pharmaCompanyId,
-        distributor: user.distributorId,
-        pharmacy: user.pharmacyId,
-      };
-
-      const businessEntity = await BusinessEntityFactoryOld.getBusinessEntity(userObj);
+      // Use businessEntityRepository to find entity by userId and role
+      const businessEntity = await this._businessEntityRepository.findByUserId(user.id, user.role);
       
       if (!businessEntity) {
         return null;
       }
 
-      // Format profile
-      const formattedProfile = BusinessEntityFactoryOld.formatBusinessProfile(businessEntity);
+      // Format profile using BusinessEntityFactory
+      const formattedProfile = BusinessEntityFactory.formatBusinessProfile(businessEntity);
       
       // Add walletAddress from user if available
       if (formattedProfile && user.walletAddress) {
@@ -56,7 +44,7 @@ export class BusinessEntityService {
       return formattedProfile;
     } catch (error) {
       // If business entity not found, return null (not an error)
-      console.log(`Business entity not found for user ${user.id} with role ${user.role}`);
+      console.log(`Business entity not found for user ${user.id} with role ${user.role}:`, error.message);
       return null;
     }
   }
