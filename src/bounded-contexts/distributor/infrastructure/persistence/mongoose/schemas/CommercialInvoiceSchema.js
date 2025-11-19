@@ -2,20 +2,20 @@ import mongoose from "mongoose";
 import { ManufacturerInvoiceSchema } from "../../../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js";
 
 // Reuse PaymentInfoSchema and DeliveryInfoSchema from ManufacturerInvoice if needed
-const PaymentInfoSchema = ManufacturerInvoiceSchema.obj.paymentInfo || new mongoose.Schema({
-  method: { type: String, enum: ["cash", "bank_transfer", "credit_card", "other"], required: false },
-  dueDate: { type: Date, required: false },
-  paidDate: { type: Date, required: false },
-  paidAmount: { type: Number, required: false },
-});
+const PaymentInfoSchema = ManufacturerInvoiceSchema.obj?.paymentInfo || new mongoose.Schema({
+  method: { type: String, enum: ["cash", "bank_transfer", "credit_card", "other"] },
+  dueDate: { type: Date },
+  paidDate: { type: Date },
+  paidAmount: { type: Number },
+}, { _id: false });
 
-const DeliveryInfoSchema = ManufacturerInvoiceSchema.obj.deliveryInfo || new mongoose.Schema({
+const DeliveryInfoSchema = ManufacturerInvoiceSchema.obj?.deliveryInfo || new mongoose.Schema({
   deliveredDate: Date,
   deliveredBy: String,
   deliveryAddress: mongoose.Schema.Types.Mixed,
   trackingNumber: String,
   carrier: String,
-});
+}, { _id: false });
 
 export const CommercialInvoiceSchema = new mongoose.Schema(
   {
@@ -23,71 +23,55 @@ export const CommercialInvoiceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
     toPharmacy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
     proofOfPharmacy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ProofOfPharmacy",
-      required: false,
     },
     drug: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "DrugInfo",
-      required: false,
-      index: true,
     },
     nftInfo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "NFTInfo",
-      required: false,
     },
     invoiceNumber: {
       type: String,
       required: true,
       unique: true,
-      index: true,
     },
     invoiceDate: {
       type: Date,
-      required: false,
     },
     quantity: {
       type: Number,
-      required: false,
     },
     unitPrice: {
       type: Number,
-      required: false,
     },
     totalAmount: {
       type: Number,
-      required: false,
     },
     vatRate: {
       type: Number,
-      required: false,
     },
     vatAmount: {
       type: Number,
-      required: false,
     },
     finalAmount: {
       type: Number,
-      required: false,
     },
     paymentInfo: {
       type: PaymentInfoSchema,
-      required: false,
     },
     deliveryInfo: {
       type: DeliveryInfoSchema,
-      required: false,
     },
     status: {
       type: String,
@@ -96,20 +80,16 @@ export const CommercialInvoiceSchema = new mongoose.Schema(
     },
     chainTxHash: {
       type: String,
-      required: false,
     },
     verificationCode: {
       type: String,
-      required: false,
     },
     verifiedAt: {
       type: Date,
-      required: false,
     },
     verifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: false,
     },
     supplyChainCompleted: {
       type: Boolean,
@@ -117,12 +97,9 @@ export const CommercialInvoiceSchema = new mongoose.Schema(
     },
     batchNumber: {
       type: String,
-      required: false,
-      index: true,
     },
     tokenIds: {
       type: [String],
-      required: false,
       default: [],
     },
   },
@@ -130,11 +107,12 @@ export const CommercialInvoiceSchema = new mongoose.Schema(
 );
 
 // Indexes for performance
+// Note: invoiceNumber already has index from unique: true
 CommercialInvoiceSchema.index({ fromDistributor: 1 });
 CommercialInvoiceSchema.index({ toPharmacy: 1 });
-CommercialInvoiceSchema.index({ invoiceNumber: 1 });
 CommercialInvoiceSchema.index({ status: 1 });
 CommercialInvoiceSchema.index({ drug: 1 });
+CommercialInvoiceSchema.index({ batchNumber: 1 });
 CommercialInvoiceSchema.index({ createdAt: -1 });
 
 export const CommercialInvoiceModel = mongoose.model("CommercialInvoice", CommercialInvoiceSchema);
