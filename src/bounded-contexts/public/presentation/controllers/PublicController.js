@@ -51,7 +51,7 @@ export class PublicController {
         trackingInfo = await this._publicTrackingService.trackDrugByTokenId(identifier);
       } catch (error) {
         // If not found by tokenId, try to find by serialNumber or batchNumber
-        const NFTInfoModel = (await import("../../../../models/NFTInfo.js")).default;
+        const { NFTInfoModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js");
         const nft = await NFTInfoModel.findOne({
           $or: [
             { tokenId: identifier },
@@ -139,41 +139,6 @@ export class PublicController {
       return res.status(500).json({
         success: false,
         message: "Lỗi server khi tìm kiếm thuốc",
-        error: error.message,
-      });
-    }
-  }
-
-  async trackDrugByNFTId(req, res) {
-    try {
-      const { tokenId } = req.params;
-
-      if (!tokenId) {
-        return res.status(400).json({
-          success: false,
-          message: "Vui lòng cung cấp tokenId",
-        });
-      }
-
-      // Reuse the existing tracking logic
-      const result = await this._trackingService.trackDrug({ tokenId });
-
-      return res.status(200).json({
-        success: true,
-        data: result,
-      });
-    } catch (error) {
-      if (error.message && error.message.includes("không tìm thấy")) {
-        return res.status(404).json({
-          success: false,
-          message: error.message,
-        });
-      }
-
-      console.error("Lỗi khi track drug:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Lỗi server khi track drug",
         error: error.message,
       });
     }

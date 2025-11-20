@@ -23,10 +23,44 @@ export class NFTMapper {
         )
       : null;
 
+    // Extract drugId - handle both populated and non-populated cases
+    let drugId = null;
+    if (document.drug) {
+      if (typeof document.drug === 'string') {
+        drugId = document.drug;
+      } else if (document.drug._id) {
+        drugId = document.drug._id.toString();
+      } else if (document.drug.toString) {
+        // For Mongoose ObjectId, toString() should work
+        const drugStr = document.drug.toString();
+        // Validate it's a valid ObjectId format
+        if (/^[0-9a-fA-F]{24}$/.test(drugStr)) {
+          drugId = drugStr;
+        }
+      }
+    }
+
+    // Extract proofOfProductionId - handle both populated and non-populated cases
+    let proofOfProductionId = null;
+    if (document.proofOfProduction) {
+      if (typeof document.proofOfProduction === 'string') {
+        proofOfProductionId = document.proofOfProduction;
+      } else if (document.proofOfProduction._id) {
+        proofOfProductionId = document.proofOfProduction._id.toString();
+      } else if (document.proofOfProduction.toString) {
+        // For Mongoose ObjectId, toString() should work
+        const proofStr = document.proofOfProduction.toString();
+        // Validate it's a valid ObjectId format
+        if (/^[0-9a-fA-F]{24}$/.test(proofStr)) {
+          proofOfProductionId = proofStr;
+        }
+      }
+    }
+
     return new NFT(
       document._id.toString(),
       document.tokenId,
-      document.drug?.toString() || document.drug?._id?.toString() || document.drug,
+      drugId,
       manufacturerId || document.owner?.toString() || null,
       document.batchNumber || "",
       document.serialNumber || "",
@@ -37,7 +71,7 @@ export class NFTMapper {
       document.chainTxHash || null,
       ipfsHash,
       document.metadata || null,
-      document.proofOfProduction?.toString() || document.proofOfProduction?._id?.toString() || null,
+      proofOfProductionId,
       document.status || NFTStatus.MINTED
     );
   }

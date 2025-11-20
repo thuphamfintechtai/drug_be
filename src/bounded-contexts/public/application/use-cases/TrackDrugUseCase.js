@@ -30,16 +30,44 @@ export class TrackDrugUseCase {
       throw new Error("Không tìm thấy NFT với tokenId này");
     }
 
-    // Get drug info
-    const drug = await this._drugInfoRepository.findById(nft.drugId);
+    // Get drug info - ensure drugId is a string ObjectId
+    let drugId = nft.drugId;
+    if (typeof drugId !== 'string') {
+      // If drugId is an object, extract the _id or convert to string
+      if (drugId && typeof drugId === 'object') {
+        drugId = drugId._id?.toString() || drugId.toString();
+      } else {
+        drugId = String(drugId);
+      }
+    }
+    
+    // Validate it's a valid ObjectId format
+    if (!/^[0-9a-fA-F]{24}$/.test(drugId)) {
+      throw new Error("Drug ID không hợp lệ");
+    }
+
+    const drug = await this._drugInfoRepository.findById(drugId);
     if (!drug) {
       throw new Error("Không tìm thấy thông tin thuốc");
     }
 
-    // Get proof of production
+    // Get proof of production - ensure proofOfProductionId is a string ObjectId
     let proofOfProduction = null;
     if (nft.proofOfProductionId) {
-      proofOfProduction = await this._proofOfProductionRepository.findById(nft.proofOfProductionId);
+      let proofId = nft.proofOfProductionId;
+      if (typeof proofId !== 'string') {
+        // If proofId is an object, extract the _id or convert to string
+        if (proofId && typeof proofId === 'object') {
+          proofId = proofId._id?.toString() || proofId.toString();
+        } else {
+          proofId = String(proofId);
+        }
+      }
+      
+      // Validate it's a valid ObjectId format
+      if (/^[0-9a-fA-F]{24}$/.test(proofId)) {
+        proofOfProduction = await this._proofOfProductionRepository.findById(proofId);
+      }
     }
 
     // Get blockchain history
@@ -53,8 +81,8 @@ export class TrackDrugUseCase {
     // Get supply chain history
     const supplyChainHistory = [];
 
-    // Find manufacturer invoices
-    const manufacturerInvoices = await this._manufacturerInvoiceRepository.findByDrug(nft.drugId);
+    // Find manufacturer invoices - use the validated drugId
+    const manufacturerInvoices = await this._manufacturerInvoiceRepository.findByDrug(drugId);
     for (const invoice of manufacturerInvoices) {
       if (invoice.tokenIds && invoice.tokenIds.includes(dto.tokenId)) {
         supplyChainHistory.push({

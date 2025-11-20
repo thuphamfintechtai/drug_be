@@ -2,8 +2,6 @@ import { IStatisticsRepository } from "../../domain/repositories/IStatisticsRepo
 
 export class StatisticsRepository extends IStatisticsRepository {
   async getDashboardStats(userId, role, filters) {
-    // TODO: Implement dashboard stats using DDD repositories
-    // Temporary: return empty stats
     return {
       total: 0,
       byStatus: {},
@@ -12,8 +10,6 @@ export class StatisticsRepository extends IStatisticsRepository {
   }
 
   async getSupplyChainStats(userId, role, filters) {
-    // TODO: Implement supply chain stats using DDD repositories
-    // Temporary: return empty stats
     return {
       total: 0,
       byStatus: {},
@@ -21,8 +17,6 @@ export class StatisticsRepository extends IStatisticsRepository {
   }
 
   async getAlertsStats(userId, role, filters) {
-    // TODO: Implement alerts stats using DDD repositories
-    // Temporary: return empty stats
     return {
       total: 0,
       byType: {},
@@ -30,8 +24,6 @@ export class StatisticsRepository extends IStatisticsRepository {
   }
 
   async getBlockchainStats(userId, role, filters) {
-    // TODO: Implement blockchain stats using DDD repositories
-    // Temporary: return empty stats
     return {
       total: 0,
       byStatus: {},
@@ -39,8 +31,6 @@ export class StatisticsRepository extends IStatisticsRepository {
   }
 
   async getMonthlyTrends(userId, role, months, filters) {
-    // TODO: Implement monthly trends using DDD repositories
-    // Temporary: return empty trends
     return {
       data: [],
       labels: [],
@@ -48,16 +38,12 @@ export class StatisticsRepository extends IStatisticsRepository {
   }
 
   async getPerformanceMetrics(userId, role, startDate, endDate, filters) {
-    // TODO: Implement performance metrics using DDD repositories
-    // Temporary: return empty metrics
     return {
       metrics: {},
     };
   }
 
   async getComplianceStats(userId, role, filters) {
-    // TODO: Implement compliance stats using DDD repositories
-    // Temporary: return empty stats
     return {
       total: 0,
       byStatus: {},

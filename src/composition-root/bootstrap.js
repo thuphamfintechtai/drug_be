@@ -440,10 +440,6 @@ export class ApplicationBootstrap {
 
     return this.container;
   }
-
-  /**
-   * Initialize shared middleware with dependencies
-   */
   async initializeMiddleware() {
     // Dynamic import for ES modules
     const { initializeAuthMiddleware } = await import("../bounded-contexts/identity-access/presentation/middleware/authMiddleware.js");
