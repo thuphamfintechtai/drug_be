@@ -753,5 +753,224 @@ export class DistributorController {
       });
     }
   }
+
+  async createContractRequest(req, res) {
+    try {
+      const dto = (await import("../../application/dto/CreateContractRequestDTO.js")).CreateContractRequestDTO.fromRequest(req);
+      const distributorId = req.user?._id?.toString();
+      const distributorPrivateKey = req.body.distributorPrivateKey;
+
+      if (!distributorId) {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ có distributor mới có thể tạo contract request",
+        });
+      }
+
+      if (!distributorPrivateKey) {
+        return res.status(400).json({
+          success: false,
+          message: "Distributor private key là bắt buộc để ký trên blockchain",
+        });
+      }
+
+      dto.validate();
+
+      const result = await this._distributorService.createContractRequest(dto, distributorId, distributorPrivateKey);
+
+      return res.status(201).json({
+        success: true,
+        message: "Đã tạo contract request thành công",
+        data: result,
+      });
+    } catch (error) {
+      if (error.message && (error.message.includes("bắt buộc") || error.message.includes("đã có hợp đồng"))) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      console.error("Lỗi khi tạo contract request:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi tạo contract request",
+        error: error.message,
+      });
+    }
+  }
+
+  async finalizeContractAndMint(req, res) {
+    try {
+      const dto = (await import("../../application/dto/FinalizeContractDTO.js")).FinalizeContractDTO.fromRequest(req);
+      const distributorId = req.user?._id?.toString();
+      const distributorPrivateKey = req.body.distributorPrivateKey;
+
+      if (!distributorId) {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ có distributor mới có thể finalize contract",
+        });
+      }
+
+      if (!distributorPrivateKey) {
+        return res.status(400).json({
+          success: false,
+          message: "Distributor private key là bắt buộc để ký và mint NFT",
+        });
+      }
+
+      dto.validate();
+
+      const result = await this._distributorService.finalizeContractAndMint(dto, distributorId, distributorPrivateKey);
+
+      return res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error) {
+      if (error.message && (error.message.includes("bắt buộc") || error.message.includes("không tìm thấy") || error.message.includes("không có quyền") || error.message.includes("APPROVED"))) {
+        return res.status(error.message.includes("không tìm thấy") ? 404 : 400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      console.error("Lỗi khi finalize contract và mint NFT:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi finalize contract và mint NFT",
+        error: error.message,
+      });
+    }
+  }
+
+  async getContracts(req, res) {
+    try {
+      const distributorId = req.user?._id?.toString();
+
+      if (!distributorId) {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ có distributor mới có thể xem contracts",
+        });
+      }
+
+      const filters = {
+        status: req.query.status,
+      };
+
+      const contracts = await this._distributorService.getContracts(distributorId, filters);
+
+      return res.status(200).json({
+        success: true,
+        data: contracts.map(contract => ({
+          id: contract.id,
+          pharmacyId: contract.pharmacyId,
+          contractFileUrl: contract.contractFileUrl,
+          contractFileName: contract.contractFileName,
+          status: contract.status,
+          blockchainTxHash: contract.blockchainTxHash,
+          blockchainStatus: contract.blockchainStatus,
+          tokenId: contract.tokenId,
+          distributorSignedAt: contract.distributorSignedAt,
+          pharmacySignedAt: contract.pharmacySignedAt,
+          createdAt: contract.createdAt,
+          updatedAt: contract.updatedAt,
+        })),
+        count: contracts.length,
+      });
+    } catch (error) {
+      console.error("Lỗi khi lấy danh sách contracts:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi lấy danh sách contracts",
+        error: error.message,
+      });
+    }
+  }
+
+  async getContractDetail(req, res) {
+    try {
+      const { contractId } = req.params;
+      const distributorId = req.user?._id?.toString();
+
+      if (!distributorId) {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ có distributor mới có thể xem contract detail",
+        });
+      }
+
+      const contract = await this._distributorService.getContractDetail(distributorId, contractId);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: contract.id,
+          pharmacyId: contract.pharmacyId,
+          contractFileUrl: contract.contractFileUrl,
+          contractFileName: contract.contractFileName,
+          status: contract.status,
+          blockchainTxHash: contract.blockchainTxHash,
+          blockchainStatus: contract.blockchainStatus,
+          tokenId: contract.tokenId,
+          distributorSignedAt: contract.distributorSignedAt,
+          pharmacySignedAt: contract.pharmacySignedAt,
+          createdAt: contract.createdAt,
+          updatedAt: contract.updatedAt,
+        },
+      });
+    } catch (error) {
+      if (error.message && (error.message.includes("không tìm thấy") || error.message.includes("không có quyền"))) {
+        return res.status(error.message.includes("không tìm thấy") ? 404 : 403).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      console.error("Lỗi khi lấy contract detail:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi lấy contract detail",
+        error: error.message,
+      });
+    }
+  }
+
+  async getContractInfoFromBlockchain(req, res) {
+    try {
+      const { distributorAddress, pharmacyAddress } = req.query;
+
+      if (!distributorAddress || !pharmacyAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "Distributor address và Pharmacy address là bắt buộc",
+        });
+      }
+
+      const contractInfo = await this._distributorService.getContractInfoFromBlockchain(distributorAddress, pharmacyAddress);
+
+      return res.status(200).json({
+        success: true,
+        data: contractInfo,
+      });
+    } catch (error) {
+      if (error.message && error.message.includes("không hợp lệ")) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      console.error("Lỗi khi lấy contract info từ blockchain:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi lấy contract info từ blockchain",
+        error: error.message,
+      });
+    }
+  }
 }
 
