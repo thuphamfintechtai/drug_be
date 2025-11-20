@@ -1,17 +1,25 @@
 import { ConfirmReceiptUseCase } from "../use-cases/ConfirmReceiptUseCase.js";
+import { ConfirmContractUseCase } from "../use-cases/ConfirmContractUseCase.js";
 import { ConfirmReceiptDTO } from "../dto/ConfirmReceiptDTO.js";
+import { ConfirmContractDTO } from "../dto/ConfirmContractDTO.js";
 
 export class PharmacyApplicationService {
   constructor(
     commercialInvoiceRepository,
     proofOfPharmacyRepository,
     nftRepository,
+    contractRepository,
+    contractBlockchainService,
+    userRepository,
     eventBus,
     drugInfoRepository = null
   ) {
     this._commercialInvoiceRepository = commercialInvoiceRepository;
     this._proofOfPharmacyRepository = proofOfPharmacyRepository;
     this._nftRepository = nftRepository;
+    this._contractRepository = contractRepository;
+    this._contractBlockchainService = contractBlockchainService;
+    this._userRepository = userRepository;
     this._drugInfoRepository = drugInfoRepository;
     this._eventBus = eventBus;
 
@@ -20,6 +28,12 @@ export class PharmacyApplicationService {
       proofOfPharmacyRepository,
       nftRepository,
       eventBus
+    );
+
+    this._confirmContractUseCase = new ConfirmContractUseCase(
+      contractRepository,
+      contractBlockchainService,
+      userRepository
     );
   }
 
@@ -377,6 +391,32 @@ export class PharmacyApplicationService {
   async getDistributionHistory(pharmacyId, filters = {}) {
     // This is the same as receipt history for pharmacy
     return await this.getReceiptHistory(pharmacyId, filters);
+  }
+
+  async confirmContract(dto, pharmacyId, pharmacyPrivateKey) {
+    return await this._confirmContractUseCase.execute(dto, pharmacyId, pharmacyPrivateKey);
+  }
+
+  async getContracts(pharmacyId, filters = {}) {
+    return await this._contractRepository.findByPharmacy(pharmacyId, filters);
+  }
+
+  async getContractDetail(pharmacyId, contractId) {
+    const contract = await this._contractRepository.findById(contractId);
+    
+    if (!contract) {
+      throw new Error("Không tìm thấy contract");
+    }
+
+    if (contract.pharmacyId !== pharmacyId) {
+      throw new Error("Bạn không có quyền xem contract này");
+    }
+
+    return contract;
+  }
+
+  async getContractInfoFromBlockchain(pharmacyAddress, distributorAddress) {
+    return await this._contractBlockchainService.getContractInfoByPharmacy(pharmacyAddress, distributorAddress);
   }
 }
 
