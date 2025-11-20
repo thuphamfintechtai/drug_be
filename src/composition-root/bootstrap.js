@@ -44,6 +44,8 @@ import { createProductionRoutes } from "../bounded-contexts/supply-chain/present
 // Distributor imports
 import { CommercialInvoiceRepository } from "../bounded-contexts/distributor/infrastructure/persistence/mongoose/CommercialInvoiceRepository.js";
 import { ProofOfDistributionRepository } from "../bounded-contexts/distributor/infrastructure/persistence/mongoose/ProofOfDistributionRepository.js";
+import { DistributorPharmacyContractRepository } from "../bounded-contexts/distributor/infrastructure/persistence/mongoose/DistributorPharmacyContractRepository.js";
+import { ContractBlockchainService } from "../bounded-contexts/distributor/infrastructure/blockchain/ContractBlockchainService.js";
 import { DistributorApplicationService } from "../bounded-contexts/distributor/application/services/DistributorApplicationService.js";
 import { DistributorController } from "../bounded-contexts/distributor/presentation/controllers/DistributorController.js";
 import { createDistributorRoutes } from "../bounded-contexts/distributor/presentation/routes/distributorRoutes.js";
@@ -128,6 +130,8 @@ export class ApplicationBootstrap {
     // Distributor infrastructure
     this.container.register("commercialInvoiceRepository", () => new CommercialInvoiceRepository(), true);
     this.container.register("proofOfDistributionRepository", () => new ProofOfDistributionRepository(), true);
+    this.container.register("contractRepository", () => new DistributorPharmacyContractRepository(), true);
+    this.container.register("contractBlockchainService", () => new ContractBlockchainService(), true);
 
     // Pharmacy infrastructure
     this.container.register("proofOfPharmacyRepository", () => new ProofOfPharmacyRepository(), true);
@@ -235,6 +239,9 @@ export class ApplicationBootstrap {
           c.resolve("nftRepository"),
           c.resolve("proofOfProductionRepository"),
           c.resolve("drugInfoRepository"),
+          c.resolve("contractRepository"),
+          c.resolve("contractBlockchainService"),
+          c.resolve("userRepository"),
           c.resolve("eventBus")
         ),
       true
@@ -248,6 +255,9 @@ export class ApplicationBootstrap {
           c.resolve("commercialInvoiceRepository"),
           c.resolve("proofOfPharmacyRepository"),
           c.resolve("nftRepository"),
+          c.resolve("contractRepository"),
+          c.resolve("contractBlockchainService"),
+          c.resolve("userRepository"),
           c.resolve("eventBus"),
           c.resolve("drugInfoRepository") // Inject for getDrugs/searchDrugByATCCode
         ),
