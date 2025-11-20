@@ -276,7 +276,8 @@ export class ApplicationBootstrap {
           c.resolve("proofOfPharmacyRepository"),
           c.resolve("manufacturerInvoiceRepository"),
           c.resolve("commercialInvoiceRepository"),
-          c.resolve("publicBlockchainService")
+          c.resolve("publicBlockchainService"),
+          c.resolve("userRepository")
         ),
       true
     );

@@ -9,7 +9,8 @@ export class TrackDrugUseCase {
     proofOfPharmacyRepository,
     manufacturerInvoiceRepository,
     commercialInvoiceRepository,
-    blockchainService
+    blockchainService,
+    userRepository = null
   ) {
     this._nftRepository = nftRepository;
     this._drugInfoRepository = drugInfoRepository;
@@ -19,169 +20,275 @@ export class TrackDrugUseCase {
     this._manufacturerInvoiceRepository = manufacturerInvoiceRepository;
     this._commercialInvoiceRepository = commercialInvoiceRepository;
     this._blockchainService = blockchainService;
+    this._userRepository = userRepository;
   }
 
   async execute(dto) {
     dto.validate();
 
-    // Find NFT by tokenId
-    const nft = await this._nftRepository.findByTokenId(dto.tokenId);
+    // Import models for direct queries (to match old logic)
+    const { NFTInfoModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js");
+    const { ProofOfProductionModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ProofOfProductionSchema.js");
+    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
+    const { ProofOfDistributionModel } = await import("../../../distributor/infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
+    const { ProofOfPharmacyModel } = await import("../../../pharmacy/infrastructure/persistence/mongoose/schemas/ProofOfPharmacySchema.js");
+    const { CommercialInvoiceModel } = await import("../../../distributor/infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
+    const { PharmaCompanyModel } = await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js");
+
+    // Find NFT with populated fields (like old logic)
+    const nft = await NFTInfoModel.findOne({
+      $or: [
+        { tokenId: dto.tokenId },
+        { serialNumber: dto.tokenId },
+        { batchNumber: dto.tokenId }
+      ]
+    })
+      .populate("drug", "tradeName atcCode genericName dosageForm strength packaging")
+      .populate("owner", "username email fullName walletAddress")
+      .populate("proofOfProduction")
+      .lean();
+
     if (!nft) {
       throw new Error("Không tìm thấy NFT với tokenId này");
-    }
-
-    // Get drug info - ensure drugId is a string ObjectId
-    let drugId = nft.drugId;
-    if (typeof drugId !== 'string') {
-      // If drugId is an object, extract the _id or convert to string
-      if (drugId && typeof drugId === 'object') {
-        drugId = drugId._id?.toString() || drugId.toString();
-      } else {
-        drugId = String(drugId);
-      }
-    }
-    
-    // Validate it's a valid ObjectId format
-    if (!/^[0-9a-fA-F]{24}$/.test(drugId)) {
-      throw new Error("Drug ID không hợp lệ");
-    }
-
-    const drug = await this._drugInfoRepository.findById(drugId);
-    if (!drug) {
-      throw new Error("Không tìm thấy thông tin thuốc");
-    }
-
-    // Get proof of production - ensure proofOfProductionId is a string ObjectId
-    let proofOfProduction = null;
-    if (nft.proofOfProductionId) {
-      let proofId = nft.proofOfProductionId;
-      if (typeof proofId !== 'string') {
-        // If proofId is an object, extract the _id or convert to string
-        if (proofId && typeof proofId === 'object') {
-          proofId = proofId._id?.toString() || proofId.toString();
-        } else {
-          proofId = String(proofId);
-        }
-      }
-      
-      // Validate it's a valid ObjectId format
-      if (/^[0-9a-fA-F]{24}$/.test(proofId)) {
-        proofOfProduction = await this._proofOfProductionRepository.findById(proofId);
-      }
     }
 
     // Get blockchain history
     let blockchainHistory = [];
     try {
-      blockchainHistory = await this._blockchainService.getTrackingHistory(dto.tokenId);
+      blockchainHistory = await this._blockchainService.getTrackingHistory(nft.tokenId);
     } catch (error) {
       console.error("Lỗi khi lấy lịch sử blockchain:", error);
     }
 
-    // Get supply chain history
-    const supplyChainHistory = [];
+    // Get production to have batchNumber
+    let production = null;
+    let batchNumber = nft.batchNumber;
+    let productionId = null;
 
-    // Find manufacturer invoices - use the validated drugId
-    const manufacturerInvoices = await this._manufacturerInvoiceRepository.findByDrug(drugId);
-    for (const invoice of manufacturerInvoices) {
-      if (invoice.tokenIds && invoice.tokenIds.includes(dto.tokenId)) {
-        supplyChainHistory.push({
-          type: "manufacturer_to_distributor",
-          invoiceId: invoice.id,
-          invoiceNumber: invoice.invoiceNumber,
-          from: invoice.fromManufacturerId,
-          to: invoice.toDistributorId,
-          date: invoice.createdAt,
-          chainTxHash: invoice.chainTxHash,
-          status: invoice.status,
+    if (nft.proofOfProduction) {
+      productionId = nft.proofOfProduction._id || nft.proofOfProduction;
+      
+      if (nft.proofOfProduction._id) {
+        production = nft.proofOfProduction;
+      } else {
+        production = await ProofOfProductionModel.findById(productionId).lean();
+      }
+      
+      if (production && production.batchNumber) {
+        batchNumber = production.batchNumber;
+      }
+    }
+
+    // Find all NFTs in the same batch
+    let batchNFTIds = [nft._id];
+    if (batchNumber) {
+      const batchNFTs = await NFTInfoModel.find({ batchNumber }).select("_id").lean();
+      batchNFTIds = batchNFTs.map(n => n._id);
+    }
+
+    // Find all proofOfProduction in the same batch
+    let batchProductionIds = [];
+    if (productionId) {
+      batchProductionIds.push(productionId);
+    }
+    if (batchNumber) {
+      const batchProductions = await ProofOfProductionModel.find({ batchNumber }).select("_id").lean();
+      const productionIds = batchProductions.map(p => p._id);
+      batchProductionIds = [...batchProductionIds, ...productionIds];
+      
+      // Remove duplicates
+      const uniqueIds = [];
+      const seen = new Set();
+      batchProductionIds.forEach(id => {
+        const idStr = id.toString();
+        if (!seen.has(idStr)) {
+          seen.add(idStr);
+          uniqueIds.push(id);
+        }
+      });
+      batchProductionIds = uniqueIds;
+    }
+
+    // Find related invoices and proofs in supply chain (search by batch)
+    const manufacturerInvoices = await ManufacturerInvoiceModel.find({
+      $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
+        { nftInfo: { $in: batchNFTIds } },
+        batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
+      ].filter(Boolean),
+    })
+      .populate("fromManufacturer", "username email fullName walletAddress")
+      .populate("toDistributor", "username email fullName walletAddress")
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    const manufacturerInvoice = manufacturerInvoices[0] || null;
+    const manufacturerInvoiceIds = manufacturerInvoices.map(inv => inv._id);
+
+    const proofOfDistributions = await ProofOfDistributionModel.find({
+      $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
+        manufacturerInvoiceIds.length > 0 ? { manufacturerInvoice: { $in: manufacturerInvoiceIds } } : null,
+        batchProductionIds.length > 0 ? { proofOfProduction: { $in: batchProductionIds } } : null,
+        { nftInfo: { $in: batchNFTIds } },
+      ].filter(Boolean),
+    })
+      .populate("fromManufacturer", "username email fullName")
+      .populate("toDistributor", "username email fullName")
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    const proofOfDistribution = proofOfDistributions[0] || null;
+    const proofOfDistributionIds = proofOfDistributions.map(pod => pod._id);
+
+    // Find ProofOfPharmacy with proofOfDistribution or nftInfo in batch
+    const proofOfPharmacies = await ProofOfPharmacyModel.find({
+      $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
+        proofOfDistributionIds.length > 0 ? { proofOfDistribution: { $in: proofOfDistributionIds } } : null,
+        { nftInfo: { $in: batchNFTIds } },
+      ].filter(Boolean),
+    })
+      .populate("fromDistributor", "username email fullName")
+      .populate("toPharmacy", "username email fullName")
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    const proofOfPharmacy = proofOfPharmacies[0] || null;
+    const proofOfPharmacyIds = proofOfPharmacies.map(pop => pop._id);
+
+    // Find CommercialInvoice via nftInfo or proofOfPharmacy
+    const commercialInvoices = await CommercialInvoiceModel.find({
+      $or: [
+        batchNumber ? { batchNumber: batchNumber } : null,
+        { nftInfo: { $in: batchNFTIds } },
+        proofOfPharmacyIds.length > 0 ? { proofOfPharmacy: { $in: proofOfPharmacyIds } } : null,
+      ].filter(Boolean),
+    })
+      .populate("fromDistributor", "username email fullName walletAddress")
+      .populate("toPharmacy", "username email fullName walletAddress")
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    const commercialInvoice = commercialInvoices[0] || null;
+
+    // Build journey from the information found
+    const journey = [];
+    
+    if (production) {
+      const productionWithManufacturer = await ProofOfProductionModel.findById(production._id || production)
+        .populate("manufacturer", "name")
+        .lean();
+      
+      journey.push({
+        stage: "manufacturing",
+        description: "Sản xuất",
+        manufacturer: productionWithManufacturer?.manufacturer?.name || "N/A",
+        date: production.mfgDate || production.createdAt,
+        details: {
+          quantity: production.quantity,
+          mfgDate: production.mfgDate,
+        },
+      });
+    } else if (nft.proofOfProduction) {
+      const productionData = await ProofOfProductionModel.findById(nft.proofOfProduction)
+        .populate("manufacturer", "name")
+        .lean();
+      if (productionData) {
+        journey.push({
+          stage: "manufacturing",
+          description: "Sản xuất",
+          manufacturer: productionData.manufacturer?.name || "N/A",
+          date: productionData.mfgDate || productionData.createdAt,
+          details: {
+            quantity: productionData.quantity,
+            mfgDate: productionData.mfgDate,
+          },
         });
       }
     }
 
-    // Find proof of distribution
-    const distributions = await this._proofOfDistributionRepository.findByDistributor(null, {});
-    for (const dist of distributions) {
-      if (dist.batchNumber === nft.batchNumber) {
-        supplyChainHistory.push({
-          type: "distribution",
-          distributionId: dist.id,
-          from: dist.fromManufacturerId,
-          to: dist.toDistributorId,
-          date: dist.distributionDate || dist.createdAt,
-          chainTxHash: dist.chainTxHash,
-          status: dist.status,
-        });
-      }
+    if (manufacturerInvoice) {
+      journey.push({
+        stage: "transfer_to_distributor",
+        description: "Chuyển giao cho Nhà phân phối",
+        from: manufacturerInvoice.fromManufacturer?.fullName || manufacturerInvoice.fromManufacturer?.username || "N/A",
+        to: manufacturerInvoice.toDistributor?.fullName || manufacturerInvoice.toDistributor?.username || "N/A",
+        date: manufacturerInvoice.createdAt,
+        invoiceNumber: manufacturerInvoice.invoiceNumber,
+      });
     }
 
-    // Find commercial invoices
-    const commercialInvoices = await this._commercialInvoiceRepository.findByPharmacy(null, {});
-    for (const invoice of commercialInvoices) {
-      if (invoice.tokenIds && invoice.tokenIds.includes(dto.tokenId)) {
-        supplyChainHistory.push({
-          type: "distributor_to_pharmacy",
-          invoiceId: invoice.id,
-          invoiceNumber: invoice.invoiceNumber,
-          from: invoice.fromDistributorId,
-          to: invoice.toPharmacyId,
-          date: invoice.createdAt,
-          chainTxHash: invoice.chainTxHash,
-          status: invoice.status,
-        });
-      }
+    if (proofOfDistribution) {
+      journey.push({
+        stage: "distributor_received",
+        description: "Nhà phân phối đã nhận hàng",
+        date: proofOfDistribution.distributionDate || proofOfDistribution.createdAt,
+        status: proofOfDistribution.status,
+      });
     }
 
-    // Find proof of pharmacy
-    const pharmacyReceipts = await this._proofOfPharmacyRepository.findByPharmacy(null, {});
-    for (const receipt of pharmacyReceipts) {
-      if (receipt.batchNumber === nft.batchNumber) {
-        supplyChainHistory.push({
-          type: "pharmacy_receipt",
-          receiptId: receipt.id,
-          from: receipt.fromDistributorId,
-          to: receipt.toPharmacyId,
-          date: receipt.receiptDate || receipt.createdAt,
-          chainTxHash: receipt.chainTxHash,
-          status: receipt.status,
-        });
-      }
+    if (commercialInvoice) {
+      journey.push({
+        stage: "transfer_to_pharmacy",
+        description: "Chuyển giao cho Nhà thuốc",
+        from: commercialInvoice.fromDistributor?.fullName || commercialInvoice.fromDistributor?.username || "N/A",
+        to: commercialInvoice.toPharmacy?.fullName || commercialInvoice.toPharmacy?.username || "N/A",
+        date: commercialInvoice.createdAt,
+        invoiceNumber: commercialInvoice.invoiceNumber,
+      });
     }
 
-    // Sort by date
-    supplyChainHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (proofOfPharmacy) {
+      journey.push({
+        stage: "pharmacy_received",
+        description: "Nhà thuốc đã nhận hàng",
+        date: proofOfPharmacy.receiptDate || proofOfPharmacy.createdAt,
+        status: proofOfPharmacy.status,
+        supplyChainCompleted: proofOfPharmacy.supplyChainCompleted,
+      });
+    }
+
+    // Basic NFT info (public info)
+    const nftInfo = {
+      tokenId: nft.tokenId,
+      serialNumber: nft.serialNumber,
+      batchNumber: nft.batchNumber,
+      drug: {
+        tradeName: nft.drug?.tradeName,
+        atcCode: nft.drug?.atcCode,
+        genericName: nft.drug?.genericName,
+        dosageForm: nft.drug?.dosageForm,
+        strength: nft.drug?.strength,
+        packaging: nft.drug?.packaging,
+      },
+      mfgDate: nft.mfgDate,
+      expDate: nft.expDate,
+      status: nft.status,
+      currentOwner: nft.owner ? {
+        username: nft.owner.username,
+        fullName: nft.owner.fullName,
+      } : null,
+    };
 
     return {
-      nft: {
-        tokenId: nft.tokenId,
-        serialNumber: nft.serialNumber,
-        batchNumber: nft.batchNumber,
-        status: nft.status,
-        ownerId: nft.ownerId,
-        mfgDate: nft.mfgDate,
-        expDate: nft.expDate,
-      },
-      drug: {
-        id: drug.id,
-        tradeName: drug.drugName,
-        genericName: drug.genericName,
-        atcCode: drug.atcCode,
-        dosageForm: drug.dosageForm,
-        strength: drug.strength,
-        packaging: drug.packaging,
-      },
-      production: proofOfProduction ? {
-        id: proofOfProduction.id,
-        batchNumber: proofOfProduction.batchNumber,
-        manufacturerId: proofOfProduction.manufacturerId,
-        quantity: proofOfProduction.quantity,
-        mfgDate: proofOfProduction.mfgDate,
-        expDate: proofOfProduction.expDate,
-        chainTxHash: proofOfProduction.chainTxHash,
-        status: proofOfProduction.status,
-      } : null,
-      supplyChainHistory,
+      nft: nftInfo,
       blockchainHistory,
+      journey,
+      supplyChain: {
+        manufacturer: manufacturerInvoice?.fromManufacturer ? {
+          name: manufacturerInvoice.fromManufacturer.fullName || manufacturerInvoice.fromManufacturer.username,
+          email: manufacturerInvoice.fromManufacturer.email,
+        } : null,
+        distributor: commercialInvoice?.fromDistributor ? {
+          name: commercialInvoice.fromDistributor.fullName || commercialInvoice.fromDistributor.username,
+          email: commercialInvoice.fromDistributor.email,
+        } : null,
+        pharmacy: commercialInvoice?.toPharmacy ? {
+          name: commercialInvoice.toPharmacy.fullName || commercialInvoice.toPharmacy.username,
+          email: commercialInvoice.toPharmacy.email,
+        } : null,
+      },
     };
   }
 }
-

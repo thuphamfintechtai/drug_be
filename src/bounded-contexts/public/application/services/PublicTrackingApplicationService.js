@@ -10,7 +10,8 @@ export class PublicTrackingApplicationService {
     proofOfPharmacyRepository,
     manufacturerInvoiceRepository,
     commercialInvoiceRepository,
-    blockchainService
+    blockchainService,
+    userRepository = null
   ) {
     this._nftRepository = nftRepository;
     this._drugInfoRepository = drugInfoRepository;
@@ -20,6 +21,7 @@ export class PublicTrackingApplicationService {
     this._manufacturerInvoiceRepository = manufacturerInvoiceRepository;
     this._commercialInvoiceRepository = commercialInvoiceRepository;
     this._blockchainService = blockchainService;
+    this._userRepository = userRepository;
 
     this._trackDrugUseCase = new TrackDrugUseCase(
       nftRepository,
@@ -29,7 +31,8 @@ export class PublicTrackingApplicationService {
       proofOfPharmacyRepository,
       manufacturerInvoiceRepository,
       commercialInvoiceRepository,
-      blockchainService
+      blockchainService,
+      userRepository
     );
   }
 
