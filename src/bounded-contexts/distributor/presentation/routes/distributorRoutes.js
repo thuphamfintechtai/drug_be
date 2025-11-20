@@ -57,6 +57,23 @@ export const createDistributorRoutes = (distributorController) => {
     distributorController.getPharmacies(req, res)
   );
 
+  // ============ QUẢN LÝ HỢP ĐỒNG VỚI PHARMACY ============
+  router.post("/contracts/create", (req, res) =>
+    distributorController.createContractRequest(req, res)
+  );
+  router.post("/contracts/finalize-and-mint", (req, res) =>
+    distributorController.finalizeContractAndMint(req, res)
+  );
+  router.get("/contracts", (req, res) =>
+    distributorController.getContracts(req, res)
+  );
+  router.get("/contracts/:contractId", (req, res) =>
+    distributorController.getContractDetail(req, res)
+  );
+  router.get("/contracts/blockchain/info", (req, res) =>
+    distributorController.getContractInfoFromBlockchain(req, res)
+  );
+
   // ============ THỐNG KÊ CHART ============
   router.get("/chart/one-week", (req, res) =>
     distributorController.getChartOneWeek(req, res)

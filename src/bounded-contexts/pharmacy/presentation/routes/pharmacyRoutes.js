@@ -16,6 +16,20 @@ export const createPharmacyRoutes = (pharmacyController) => {
     pharmacyController.confirmReceipt(req, res)
   );
 
+  // ============ QUẢN LÝ HỢP ĐỒNG VỚI DISTRIBUTOR ============
+  router.post("/contracts/confirm", (req, res) =>
+    pharmacyController.confirmContract(req, res)
+  );
+  router.get("/contracts", (req, res) =>
+    pharmacyController.getContracts(req, res)
+  );
+  router.get("/contracts/:contractId", (req, res) =>
+    pharmacyController.getContractDetail(req, res)
+  );
+  router.get("/contracts/blockchain/info", (req, res) =>
+    pharmacyController.getContractInfoFromBlockchain(req, res)
+  );
+
   // ============ LỊCH SỬ VÀ THỐNG KÊ ============
   router.get("/receipt/history", (req, res) =>
     pharmacyController.getReceiptHistory(req, res)
