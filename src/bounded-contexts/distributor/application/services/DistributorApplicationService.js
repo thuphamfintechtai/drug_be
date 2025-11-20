@@ -1,7 +1,11 @@
 import { ConfirmReceiptUseCase } from "../use-cases/ConfirmReceiptUseCase.js";
 import { TransferToPharmacyUseCase } from "../use-cases/TransferToPharmacyUseCase.js";
+import { CreateContractRequestUseCase } from "../use-cases/CreateContractRequestUseCase.js";
+import { FinalizeContractAndMintUseCase } from "../use-cases/FinalizeContractAndMintUseCase.js";
 import { ConfirmReceiptDTO } from "../dto/ConfirmReceiptDTO.js";
 import { TransferToPharmacyDTO } from "../dto/TransferToPharmacyDTO.js";
+import { CreateContractRequestDTO } from "../dto/CreateContractRequestDTO.js";
+import { FinalizeContractDTO } from "../dto/FinalizeContractDTO.js";
 
 export class DistributorApplicationService {
   constructor(
@@ -11,6 +15,9 @@ export class DistributorApplicationService {
     nftRepository,
     proofOfProductionRepository,
     drugInfoRepository,
+    contractRepository,
+    contractBlockchainService,
+    userRepository,
     eventBus
   ) {
     this._manufacturerInvoiceRepository = manufacturerInvoiceRepository;
@@ -19,6 +26,9 @@ export class DistributorApplicationService {
     this._nftRepository = nftRepository;
     this._proofOfProductionRepository = proofOfProductionRepository;
     this._drugInfoRepository = drugInfoRepository;
+    this._contractRepository = contractRepository;
+    this._contractBlockchainService = contractBlockchainService;
+    this._userRepository = userRepository;
     this._eventBus = eventBus;
 
     this._confirmReceiptUseCase = new ConfirmReceiptUseCase(
@@ -34,6 +44,19 @@ export class DistributorApplicationService {
       nftRepository,
       commercialInvoiceRepository,
       eventBus
+    );
+
+    this._createContractRequestUseCase = new CreateContractRequestUseCase(
+      contractRepository,
+      contractBlockchainService,
+      userRepository
+    );
+
+    this._finalizeContractAndMintUseCase = new FinalizeContractAndMintUseCase(
+      contractRepository,
+      contractBlockchainService,
+      userRepository,
+      nftRepository
     );
   }
 
@@ -579,6 +602,36 @@ export class DistributorApplicationService {
       dailyStats,
       transfers: commercialInvoices,
     };
+  }
+
+  async createContractRequest(dto, distributorId, distributorPrivateKey) {
+    return await this._createContractRequestUseCase.execute(dto, distributorId, distributorPrivateKey);
+  }
+
+  async finalizeContractAndMint(dto, distributorId, distributorPrivateKey) {
+    return await this._finalizeContractAndMintUseCase.execute(dto, distributorId, distributorPrivateKey);
+  }
+
+  async getContracts(distributorId, filters = {}) {
+    return await this._contractRepository.findByDistributor(distributorId, filters);
+  }
+
+  async getContractDetail(distributorId, contractId) {
+    const contract = await this._contractRepository.findById(contractId);
+    
+    if (!contract) {
+      throw new Error("Không tìm thấy contract");
+    }
+
+    if (contract.distributorId !== distributorId) {
+      throw new Error("Bạn không có quyền xem contract này");
+    }
+
+    return contract;
+  }
+
+  async getContractInfoFromBlockchain(distributorAddress, pharmacyAddress) {
+    return await this._contractBlockchainService.getContractInfoByDistributor(distributorAddress, pharmacyAddress);
   }
 }
 
