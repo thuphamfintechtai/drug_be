@@ -1,4 +1,4 @@
-09200import DateHelper from "./DateHelper.js";
+import DateHelper from "./DateHelper.js";
 
 export default class DataAggregationService {
   static groupInvoicesByDate(invoices) {
@@ -45,6 +45,32 @@ export default class DataAggregationService {
       grouped[date].count++;
       grouped[date].quantity += dist.distributedQuantity || 0;
       grouped[date].distributions.push(dist);
+    });
+
+    // Convert to array and sort by date
+    return Object.values(grouped).sort((a, b) => 
+      new Date(a.date) - new Date(b.date)
+    );
+  }
+
+  static groupProductionsByDate(productions) {
+    const grouped = {};
+
+    productions.forEach((production) => {
+      const date = DateHelper.formatDate(new Date(production.createdAt));
+      
+      if (!grouped[date]) {
+        grouped[date] = {
+          date,
+          count: 0,
+          quantity: 0,
+          productions: [],
+        };
+      }
+
+      grouped[date].count++;
+      grouped[date].quantity += production.quantity || 0;
+      grouped[date].productions.push(production);
     });
 
     // Convert to array and sort by date
