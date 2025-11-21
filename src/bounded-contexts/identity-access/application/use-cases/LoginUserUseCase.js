@@ -45,7 +45,8 @@ export class LoginUserUseCase {
       let businessProfile = null;
       if (user.roleVO.isBusinessRole() && this._businessEntityService) {
         try {
-          businessProfile = await this._businessEntityService.getBusinessProfile(user);
+          businessProfile =
+            await this._businessEntityService.getBusinessProfile(user);
         } catch (error) {
           // Business entity might not exist yet
           console.log(`Business entity not found for user ${user.id}`);
@@ -53,16 +54,16 @@ export class LoginUserUseCase {
       }
 
       return {
-        user: UserResponseDTO.fromUser(user),
-        businessProfile,
         token,
       };
     } catch (error) {
-      if (error.message.includes("Email hoặc mật khẩu") || error.message.includes("trạng thái")) {
+      if (
+        error.message.includes("Email hoặc mật khẩu") ||
+        error.message.includes("trạng thái")
+      ) {
         throw new InvalidCredentialsException(error.message);
       }
       throw error;
     }
   }
 }
-
