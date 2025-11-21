@@ -1,11 +1,17 @@
 import { IPasswordResetRepository } from "../../../domain/repositories/IPasswordResetRepository.js";
 import PasswordResetModel from "./schemas/PasswordResetSchema.js";
+import mongoose from "mongoose";
 
 /**
  * Mongoose implementation of IPasswordResetRepository
  */
 export class PasswordResetRepository extends IPasswordResetRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await PasswordResetModel.findById(id)
       .populate("user", "username email fullName role")
       .populate("reviewedBy", "username email");

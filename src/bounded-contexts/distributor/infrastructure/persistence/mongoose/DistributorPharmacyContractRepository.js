@@ -1,6 +1,7 @@
 import { IDistributorPharmacyContractRepository } from "../../../domain/repositories/IDistributorPharmacyContractRepository.js";
 import { DistributorPharmacyContractModel } from "./schemas/DistributorPharmacyContractSchema.js";
 import { DistributorPharmacyContractMapper } from "./mappers/DistributorPharmacyContractMapper.js";
+import mongoose from "mongoose";
 
 export class DistributorPharmacyContractRepository extends IDistributorPharmacyContractRepository {
   async save(contract) {
@@ -20,6 +21,11 @@ export class DistributorPharmacyContractRepository extends IDistributorPharmacyC
   }
 
   async findById(contractId) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(contractId)) {
+      return null;
+    }
+    
     const document = await DistributorPharmacyContractModel.findById(contractId)
       .populate("distributor", "name licenseNo taxCode")
       .populate("pharmacy", "name licenseNo taxCode");

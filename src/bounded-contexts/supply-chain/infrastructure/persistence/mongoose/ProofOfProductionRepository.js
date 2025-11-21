@@ -1,9 +1,15 @@
 import { IProofOfProductionRepository } from "../../../domain/repositories/IProofOfProductionRepository.js";
 import { ProofOfProductionModel } from "./schemas/ProofOfProductionSchema.js";
 import { ProofOfProductionMapper } from "./mappers/ProofOfProductionMapper.js";
+import mongoose from "mongoose";
 
 export class ProofOfProductionRepository extends IProofOfProductionRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await ProofOfProductionModel.findById(id)
       .populate("manufacturer")
       .populate("drug");

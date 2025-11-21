@@ -1,9 +1,15 @@
 import { IRegistrationRequestRepository } from "../../../domain/repositories/IRegistrationRequestRepository.js";
 import { RegistrationRequestModel } from "./schemas/RegistrationRequestSchema.js";
 import { RegistrationRequestMapper } from "./mappers/RegistrationRequestMapper.js";
+import mongoose from "mongoose";
 
 export class RegistrationRequestRepository extends IRegistrationRequestRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await RegistrationRequestModel.findById(id).populate("user");
     return RegistrationRequestMapper.toDomain(document);
   }
@@ -94,6 +100,11 @@ export class RegistrationRequestRepository extends IRegistrationRequestRepositor
   }
 
   async findWithUserDetails(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await RegistrationRequestModel.findById(id)
       .populate("user", "username email fullName walletAddress phone country address")
       .populate("reviewedBy", "username email");

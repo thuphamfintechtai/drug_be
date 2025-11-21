@@ -1,9 +1,15 @@
 import { IUserRepository } from "../../../domain/repositories/IUserRepository.js";
 import { UserModel } from "./schemas/UserSchema.js";
 import { UserMapper } from "./mappers/UserMapper.js";
+import mongoose from "mongoose";
 
 export class UserRepository extends IUserRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await UserModel.findById(id);
     return UserMapper.toDomain(document);
   }

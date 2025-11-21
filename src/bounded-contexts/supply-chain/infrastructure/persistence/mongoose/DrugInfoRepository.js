@@ -1,9 +1,15 @@
 import { IDrugInfoRepository } from "../../../domain/repositories/IDrugInfoRepository.js";
 import { DrugInfoModel } from "./schemas/DrugInfoSchema.js";
 import { DrugInfoMapper } from "./mappers/DrugInfoMapper.js";
+import mongoose from "mongoose";
 
 export class DrugInfoRepository extends IDrugInfoRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await DrugInfoModel.findById(id).populate("manufacturer");
     return DrugInfoMapper.toDomain(document);
   }

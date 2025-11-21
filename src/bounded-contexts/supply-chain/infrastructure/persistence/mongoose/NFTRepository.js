@@ -1,9 +1,15 @@
 import { INFTRepository } from "../../../domain/repositories/INFTRepository.js";
 import { NFTInfoModel } from "./schemas/NFTInfoSchema.js";
 import { NFTMapper } from "./mappers/NFTMapper.js";
+import mongoose from "mongoose";
 
 export class NFTRepository extends INFTRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await NFTInfoModel.findById(id)
       .populate("drug")
       .populate("owner")

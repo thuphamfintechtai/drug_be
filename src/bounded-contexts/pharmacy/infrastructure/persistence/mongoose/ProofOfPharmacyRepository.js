@@ -1,9 +1,15 @@
 import { IProofOfPharmacyRepository } from "../../../domain/repositories/IProofOfPharmacyRepository.js";
 import { ProofOfPharmacyModel } from "./schemas/ProofOfPharmacySchema.js";
 import { ProofOfPharmacyMapper } from "./mappers/ProofOfPharmacyMapper.js";
+import mongoose from "mongoose";
 
 export class ProofOfPharmacyRepository extends IProofOfPharmacyRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await ProofOfPharmacyModel.findById(id)
       .populate("fromDistributor")
       .populate("toPharmacy")

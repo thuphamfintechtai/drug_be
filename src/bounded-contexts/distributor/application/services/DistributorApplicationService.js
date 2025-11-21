@@ -175,11 +175,11 @@ export class DistributorApplicationService {
   }
 
   async getStatistics(distributorId) {
-    // Import old models for statistics
-    const ManufacturerInvoiceModel = (await import("../../../../models/ManufacturerInvoice.js")).default;
-    const ProofOfDistributionModel = (await import("../../../../models/ProofOfDistribution.js")).default;
-    const CommercialInvoiceModel = (await import("../../../../models/CommercialInvoice.js")).default;
-    const NFTInfoModel = (await import("../../../../models/NFTInfo.js")).default;
+    // Import mongoose models for statistics
+    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
+    const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
+    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
+    const { NFTInfoModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js");
 
     // Count invoices from manufacturer
     const totalInvoices = await ManufacturerInvoiceModel.countDocuments({
@@ -341,7 +341,7 @@ export class DistributorApplicationService {
     const distributor = await BusinessEntityFactory.getBusinessEntityWithValidation(user, "distributor");
     
     // Get user info
-    const UserModel = (await import("../../../../models/User.js")).default;
+    const { UserModel } = await import("../../../identity-access/infrastructure/persistence/mongoose/schemas/UserSchema.js");
     const userInfo = await UserModel.findById(user._id || user.id).select("-password");
 
     return {
@@ -351,7 +351,7 @@ export class DistributorApplicationService {
   }
 
   async getPharmacies(filters = {}) {
-    const PharmacyModel = (await import("../../../../models/Pharmacy.js")).default;
+    const { PharmacyModel } = await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js");
     
     const query = { status: filters.status || "active" };
     
@@ -385,9 +385,9 @@ export class DistributorApplicationService {
   }
 
   async getChartOneWeek(distributorId) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const ManufacturerInvoiceModel = (await import("../../../../models/ManufacturerInvoice.js")).default;
+    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
+    const DataAggregationService = (await import("../../../../shared-kernel/utils/DataAggregationService.js")).default;
+    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
 
     const { start: sevenDaysAgo } = DateHelper.getWeekRange();
     const invoices = await ManufacturerInvoiceModel.find({
@@ -411,9 +411,9 @@ export class DistributorApplicationService {
   }
 
   async getChartTodayYesterday(distributorId) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const ManufacturerInvoiceModel = (await import("../../../../models/ManufacturerInvoice.js")).default;
+    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
+    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
+    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
 
     const { start: startOfToday } = DateHelper.getTodayRange();
     const { start: startOfYesterday } = DateHelper.getYesterdayRange();
@@ -461,10 +461,10 @@ export class DistributorApplicationService {
   }
 
   async getInvoicesByDateRange(distributorId, startDate, endDate) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const ManufacturerInvoiceModel = (await import("../../../../models/ManufacturerInvoice.js")).default;
+    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
+    const DataAggregationService = (await import("../../../../shared-kernel/utils/DataAggregationService.js")).default;
+    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
+    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
 
     const { start, end } = DateHelper.parseDateRange(startDate, endDate);
 
@@ -505,10 +505,10 @@ export class DistributorApplicationService {
   }
 
   async getDistributionsByDateRange(distributorId, startDate, endDate) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const ProofOfDistributionModel = (await import("../../../../models/ProofOfDistribution.js")).default;
+    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
+    const DataAggregationService = (await import("../../../../shared-kernel/utils/DataAggregationService.js")).default;
+    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
+    const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
 
     const { start, end } = DateHelper.parseDateRange(startDate, endDate);
 
@@ -549,10 +549,10 @@ export class DistributorApplicationService {
   }
 
   async getTransfersToPharmacyByDateRange(distributorId, startDate, endDate) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const CommercialInvoiceModel = (await import("../../../../models/CommercialInvoice.js")).default;
+    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
+    const DataAggregationService = (await import("../../../../shared-kernel/utils/DataAggregationService.js")).default;
+    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
+    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
 
     if (!startDate || !endDate) {
       throw new Error("Vui lòng cung cấp startDate và endDate");

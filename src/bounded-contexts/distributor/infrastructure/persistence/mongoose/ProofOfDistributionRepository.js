@@ -1,9 +1,15 @@
 import { IProofOfDistributionRepository } from "../../../domain/repositories/IProofOfDistributionRepository.js";
 import { ProofOfDistributionModel } from "./schemas/ProofOfDistributionSchema.js";
 import { ProofOfDistributionMapper } from "./mappers/ProofOfDistributionMapper.js";
+import mongoose from "mongoose";
 
 export class ProofOfDistributionRepository extends IProofOfDistributionRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await ProofOfDistributionModel.findById(id)
       .populate("fromManufacturer")
       .populate("toDistributor")

@@ -1,9 +1,15 @@
 import { ICommercialInvoiceRepository } from "../../../domain/repositories/ICommercialInvoiceRepository.js";
 import { CommercialInvoiceModel } from "./schemas/CommercialInvoiceSchema.js";
 import { CommercialInvoiceMapper } from "./mappers/CommercialInvoiceMapper.js";
+import mongoose from "mongoose";
 
 export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await CommercialInvoiceModel.findById(id)
       .populate("fromDistributor")
       .populate("toPharmacy")

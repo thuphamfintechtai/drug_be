@@ -24,10 +24,67 @@ export const createDistributorRoutes = (distributorController) => {
    *         name: status
    *         schema:
    *           type: string
-   *           enum: [pending, confirmed, rejected]
+   *           enum: [draft, pending, issued, sent, paid, cancelled]
+   *         description: Lọc theo trạng thái đơn hàng
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *         description: Tìm kiếm theo số hóa đơn hoặc số lô
    *     responses:
    *       200:
    *         description: Danh sách đơn hàng
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                         description: ID của invoice
+   *                         example: "507f1f77bcf86cd799439011"
+   *                       invoiceNumber:
+   *                         type: string
+   *                         description: Số hóa đơn
+   *                         example: "INV-2024-001"
+   *                       manufacturerId:
+   *                         type: string
+   *                         description: ID nhà sản xuất
+   *                       drugId:
+   *                         type: string
+   *                         description: ID thuốc
+   *                       quantity:
+   *                         type: number
+   *                         description: Số lượng
+   *                       status:
+   *                         type: string
+   *                         enum: [draft, pending, issued, sent, paid, cancelled]
+   *                         description: Trạng thái đơn hàng
+   *                       chainTxHash:
+   *                         type: string
+   *                         description: Transaction hash trên blockchain
+   *                       tokenIds:
+   *                         type: array
+   *                         items:
+   *                           type: string
+   *                         description: Danh sách token ID
+   *                       createdAt:
+   *                         type: string
+   *                         format: date-time
+   *                 count:
+   *                   type: number
+   *                   description: Tổng số invoice
+   *                   example: 10
+   *       500:
+   *         description: Lỗi server
    */
   router.get("/invoices", (req, res) =>
     distributorController.getInvoicesFromManufacturer(req, res)
@@ -47,9 +104,122 @@ export const createDistributorRoutes = (distributorController) => {
    *         required: true
    *         schema:
    *           type: string
+   *         description: ID của invoice (phải là MongoDB ObjectId hợp lệ)
    *     responses:
    *       200:
    *         description: Chi tiết đơn hàng
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                       description: ID của invoice
+   *                       example: "507f1f77bcf86cd799439011"
+   *                     invoiceNumber:
+   *                       type: string
+   *                       description: Số hóa đơn
+   *                       example: "INV-2024-001"
+   *                     fromManufacturerId:
+   *                       type: string
+   *                       description: ID nhà sản xuất
+   *                     toDistributorId:
+   *                       type: string
+   *                       description: ID nhà phân phối
+   *                     drugId:
+   *                       type: string
+   *                       description: ID thuốc
+   *                     quantity:
+   *                       type: number
+   *                       description: Số lượng
+   *                     status:
+   *                       type: string
+   *                       enum: [draft, pending, issued, sent, paid, cancelled]
+   *                       description: Trạng thái đơn hàng
+   *                     chainTxHash:
+   *                       type: string
+   *                       description: Transaction hash trên blockchain
+   *                     tokenIds:
+   *                       type: array
+   *                       items:
+   *                         type: string
+   *                       description: Danh sách token ID của NFT
+   *                     invoiceDate:
+   *                       type: string
+   *                       format: date-time
+   *                       description: Ngày tạo hóa đơn
+   *                     unitPrice:
+   *                       type: number
+   *                       description: Đơn giá
+   *                     totalAmount:
+   *                       type: number
+   *                       description: Tổng tiền trước VAT
+   *                     vatRate:
+   *                       type: number
+   *                       description: Thuế VAT (%)
+   *                     vatAmount:
+   *                       type: number
+   *                       description: Số tiền VAT
+   *                     finalAmount:
+   *                       type: number
+   *                       description: Tổng tiền sau VAT
+   *                     notes:
+   *                       type: string
+   *                       description: Ghi chú
+   *                     createdAt:
+   *                       type: string
+   *                       format: date-time
+   *                     updatedAt:
+   *                       type: string
+   *                       format: date-time
+   *       404:
+   *         description: Không tìm thấy invoice
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Không tìm thấy invoice"
+   *       403:
+   *         description: Không có quyền truy cập
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Bạn không có quyền xem invoice này"
+   *       500:
+   *         description: Lỗi server
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Lỗi server khi lấy invoice detail"
+   *                 error:
+   *                   type: string
    */
   router.get("/invoices/:invoiceId/detail", (req, res) =>
     distributorController.getInvoiceDetail(req, res)
@@ -156,12 +326,61 @@ export const createDistributorRoutes = (distributorController) => {
    *       - bearerAuth: []
    *     parameters:
    *       - in: query
-   *         name: page
+   *         name: status
    *         schema:
-   *           type: integer
+   *           type: string
+   *           enum: [pending, in_transit, delivered, confirmed, rejected]
+   *         description: Lọc theo trạng thái
+   *       - in: query
+   *         name: batchNumber
+   *         schema:
+   *           type: string
+   *         description: Lọc theo số lô
    *     responses:
    *       200:
    *         description: Lịch sử phân phối
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                         description: ID của proof of distribution
+   *                         example: "507f1f77bcf86cd799439011"
+   *                       manufacturerId:
+   *                         type: string
+   *                         description: ID nhà sản xuất
+   *                       batchNumber:
+   *                         type: string
+   *                         description: Số lô
+   *                       quantity:
+   *                         type: number
+   *                         description: Số lượng đã phân phối
+   *                       status:
+   *                         type: string
+   *                         enum: [pending, in_transit, delivered, confirmed, rejected]
+   *                         description: Trạng thái phân phối
+   *                       distributionDate:
+   *                         type: string
+   *                         format: date-time
+   *                         description: Ngày phân phối
+   *                       createdAt:
+   *                         type: string
+   *                         format: date-time
+   *                 count:
+   *                   type: number
+   *                   description: Tổng số bản ghi
+   *       500:
+   *         description: Lỗi server
    */
   router.get("/distribution/history", (req, res) =>
     distributorController.getDistributionHistory(req, res)
@@ -175,9 +394,70 @@ export const createDistributorRoutes = (distributorController) => {
    *     tags: [Distributor]
    *     security:
    *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: status
+   *         schema:
+   *           type: string
+   *           enum: [draft, sent, paid]
+   *         description: Lọc theo trạng thái
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *         description: Tìm kiếm theo số hóa đơn hoặc số lô
    *     responses:
    *       200:
    *         description: Lịch sử chuyển giao
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                         description: ID của commercial invoice
+   *                         example: "507f1f77bcf86cd799439011"
+   *                       invoiceNumber:
+   *                         type: string
+   *                         description: Số hóa đơn
+   *                       pharmacyId:
+   *                         type: string
+   *                         description: ID nhà thuốc
+   *                       drugId:
+   *                         type: string
+   *                         description: ID thuốc
+   *                       quantity:
+   *                         type: number
+   *                         description: Số lượng
+   *                       status:
+   *                         type: string
+   *                         enum: [draft, sent, paid]
+   *                         description: Trạng thái chuyển giao
+   *                       chainTxHash:
+   *                         type: string
+   *                         description: Transaction hash trên blockchain
+   *                       tokenIds:
+   *                         type: array
+   *                         items:
+   *                           type: string
+   *                         description: Danh sách token ID
+   *                       createdAt:
+   *                         type: string
+   *                         format: date-time
+   *                 count:
+   *                   type: number
+   *                   description: Tổng số bản ghi
+   *       500:
+   *         description: Lỗi server
    */
   router.get("/transfer/history", (req, res) =>
     distributorController.getTransferToPharmacyHistory(req, res)
@@ -229,9 +509,95 @@ export const createDistributorRoutes = (distributorController) => {
    *     tags: [Distributor]
    *     security:
    *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *         description: Số trang
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 10
+   *         description: Số lượng mỗi trang
+   *       - in: query
+   *         name: status
+   *         schema:
+   *           type: string
+   *           enum: [active, inactive]
+   *         description: Lọc theo trạng thái
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *         description: Tìm kiếm theo tên thuốc, tên chung hoặc mã ATC
    *     responses:
    *       200:
    *         description: Danh sách thuốc
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     drugs:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                         properties:
+   *                           id:
+   *                             type: string
+   *                             description: ID của thuốc
+   *                             example: "507f1f77bcf86cd799439011"
+   *                           tradeName:
+   *                             type: string
+   *                             description: Tên biệt dược
+   *                           genericName:
+   *                             type: string
+   *                             description: Tên chung (hoạt chất)
+   *                           atcCode:
+   *                             type: string
+   *                             description: Mã ATC
+   *                           dosageForm:
+   *                             type: string
+   *                             description: Dạng bào chế
+   *                           strength:
+   *                             type: string
+   *                             description: Hàm lượng
+   *                           packaging:
+   *                             type: string
+   *                             description: Quy cách đóng gói
+   *                           status:
+   *                             type: string
+   *                             enum: [active, inactive]
+   *                             description: Trạng thái
+   *                           manufacturerId:
+   *                             type: string
+   *                             description: ID nhà sản xuất
+   *                     pagination:
+   *                       type: object
+   *                       properties:
+   *                         total:
+   *                           type: integer
+   *                           description: Tổng số thuốc
+   *                         page:
+   *                           type: integer
+   *                           description: Trang hiện tại
+   *                         limit:
+   *                           type: integer
+   *                           description: Số lượng mỗi trang
+   *                         totalPages:
+   *                           type: integer
+   *                           description: Tổng số trang
+   *       500:
+   *         description: Lỗi server
    */
   router.get("/drugs", (req, res) => distributorController.getDrugs(req, res));
 
@@ -362,9 +728,68 @@ export const createDistributorRoutes = (distributorController) => {
    *         schema:
    *           type: string
    *           enum: [pending, confirmed, rejected]
+   *         description: Lọc theo trạng thái hợp đồng
    *     responses:
    *       200:
    *         description: Danh sách hợp đồng
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                         description: ID của hợp đồng
+   *                         example: "507f1f77bcf86cd799439011"
+   *                       pharmacyId:
+   *                         type: string
+   *                         description: ID nhà thuốc
+   *                       contractFileUrl:
+   *                         type: string
+   *                         description: URL file hợp đồng
+   *                       contractFileName:
+   *                         type: string
+   *                         description: Tên file hợp đồng
+   *                       status:
+   *                         type: string
+   *                         enum: [pending, confirmed, rejected]
+   *                         description: Trạng thái hợp đồng
+   *                       blockchainTxHash:
+   *                         type: string
+   *                         description: Transaction hash trên blockchain
+   *                       blockchainStatus:
+   *                         type: string
+   *                         description: Trạng thái trên blockchain
+   *                       tokenId:
+   *                         type: string
+   *                         description: Token ID của NFT hợp đồng
+   *                       distributorSignedAt:
+   *                         type: string
+   *                         format: date-time
+   *                         description: Thời điểm distributor ký
+   *                       pharmacySignedAt:
+   *                         type: string
+   *                         format: date-time
+   *                         description: Thời điểm pharmacy ký
+   *                       createdAt:
+   *                         type: string
+   *                         format: date-time
+   *                       updatedAt:
+   *                         type: string
+   *                         format: date-time
+   *                 count:
+   *                   type: number
+   *                   description: Tổng số hợp đồng
+   *       500:
+   *         description: Lỗi server
    */
   router.get("/contracts", (req, res) =>
     distributorController.getContracts(req, res)
@@ -384,9 +809,87 @@ export const createDistributorRoutes = (distributorController) => {
    *         required: true
    *         schema:
    *           type: string
+   *         description: ID của hợp đồng (phải là MongoDB ObjectId hợp lệ)
    *     responses:
    *       200:
    *         description: Chi tiết hợp đồng
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                       description: ID của hợp đồng
+   *                       example: "507f1f77bcf86cd799439011"
+   *                     pharmacyId:
+   *                       type: string
+   *                       description: ID nhà thuốc
+   *                     contractFileUrl:
+   *                       type: string
+   *                       description: URL file hợp đồng
+   *                     contractFileName:
+   *                       type: string
+   *                       description: Tên file hợp đồng
+   *                     status:
+   *                       type: string
+   *                       enum: [pending, confirmed, rejected]
+   *                       description: Trạng thái hợp đồng
+   *                     blockchainTxHash:
+   *                       type: string
+   *                       description: Transaction hash trên blockchain
+   *                     blockchainStatus:
+   *                       type: string
+   *                       description: Trạng thái trên blockchain
+   *                     tokenId:
+   *                       type: string
+   *                       description: Token ID của NFT hợp đồng
+   *                     distributorSignedAt:
+   *                       type: string
+   *                       format: date-time
+   *                     pharmacySignedAt:
+   *                       type: string
+   *                       format: date-time
+   *                     createdAt:
+   *                       type: string
+   *                       format: date-time
+   *                     updatedAt:
+   *                       type: string
+   *                       format: date-time
+   *       404:
+   *         description: Không tìm thấy hợp đồng
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Không tìm thấy contract"
+   *       403:
+   *         description: Không có quyền truy cập
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Bạn không có quyền xem contract này"
+   *       500:
+   *         description: Lỗi server
    */
   router.get("/contracts/:contractId", (req, res) =>
     distributorController.getContractDetail(req, res)

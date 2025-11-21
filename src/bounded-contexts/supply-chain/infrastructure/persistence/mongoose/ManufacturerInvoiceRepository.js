@@ -1,9 +1,15 @@
 import { IManufacturerInvoiceRepository } from "../../../domain/repositories/IManufacturerInvoiceRepository.js";
 import { ManufacturerInvoiceModel } from "./schemas/ManufacturerInvoiceSchema.js";
 import { ManufacturerInvoiceMapper } from "./mappers/ManufacturerInvoiceMapper.js";
+import mongoose from "mongoose";
 
 export class ManufacturerInvoiceRepository extends IManufacturerInvoiceRepository {
   async findById(id) {
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
     const document = await ManufacturerInvoiceModel.findById(id)
       .populate("fromManufacturer")
       .populate("toDistributor")
