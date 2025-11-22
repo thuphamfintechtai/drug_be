@@ -90,6 +90,22 @@ export const createAdminRoutes = (adminController) => {
 
   /**
    * @swagger
+   * /api/admin/drugs/statistics:
+   *   get:
+   *     summary: Lấy thống kê thuốc (Admin only)
+   *     tags: [Admin]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Thống kê thuốc
+   */
+  router.get("/drugs/statistics", (req, res) =>
+    adminController.getDrugStatistics(req, res)
+  );
+
+  /**
+   * @swagger
    * /api/admin/drugs/{drugId}:
    *   get:
    *     summary: Lấy chi tiết thuốc (Admin only)
@@ -108,22 +124,6 @@ export const createAdminRoutes = (adminController) => {
    */
   router.get("/drugs/:drugId", (req, res) =>
     adminController.getDrugDetails(req, res)
-  );
-
-  /**
-   * @swagger
-   * /api/admin/drugs/statistics:
-   *   get:
-   *     summary: Lấy thống kê thuốc (Admin only)
-   *     tags: [Admin]
-   *     security:
-   *       - bearerAuth: []
-   *     responses:
-   *       200:
-   *         description: Thống kê thuốc
-   */
-  router.get("/drugs/statistics", (req, res) =>
-    adminController.getDrugStatistics(req, res)
   );
 
   /**

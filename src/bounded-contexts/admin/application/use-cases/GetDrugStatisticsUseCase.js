@@ -16,6 +16,8 @@ export class GetDrugStatisticsUseCase {
       recalled: await DrugInfoModel.countDocuments({ status: "recalled" }),
     };
 
+    console.log("byStatus:", byStatus);
+
     // Thống kê theo manufacturer
     const drugsByManufacturer = await DrugInfoModel.aggregate([
       {
