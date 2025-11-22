@@ -26,7 +26,10 @@ export class SubmitRegistrationUseCase {
     dto.validate();
 
     // Check if user already exists
-    const existingUser = await this._userRepository.findByEmailOrUsername(dto.email, dto.username);
+    const existingUser = await this._userRepository.findByEmailOrUsername(
+      dto.email,
+      dto.username
+    );
     if (existingUser) {
       throw new Error("Email hoặc username đã tồn tại");
     }
@@ -42,12 +45,11 @@ export class SubmitRegistrationUseCase {
     }
 
     // Create user
-    const userId = crypto.randomUUID();
     const passwordHash = await this._passwordHasher.hash(dto.password);
     const walletAddressVO = WalletAddress.create(dto.walletAddress);
 
     const user = User.create(
-      userId,
+      crypto.randomUUID(), // Temporary UUID, will be replaced with ObjectId after save
       dto.username,
       dto.email,
       passwordHash,
@@ -59,10 +61,10 @@ export class SubmitRegistrationUseCase {
     );
 
     user.setWalletAddress(walletAddressVO.value);
-    await this._userRepository.save(user);
+    const savedUser = await this._userRepository.save(user);
 
     // Publish user registered events
-    user.domainEvents.forEach((event) => {
+    savedUser.domainEvents.forEach((event) => {
       this._eventBus.publish(event);
     });
 
@@ -80,8 +82,12 @@ export class SubmitRegistrationUseCase {
       dto.gmpCertNo
     );
 
-    // Create registration request
-    const registrationRequest = RegistrationRequest.create(userId, dto.role, companyInfo);
+    // Create registration request - use savedUser.id (ObjectId) instead of userId (UUID)
+    const registrationRequest = RegistrationRequest.create(
+      savedUser.id,
+      dto.role,
+      companyInfo
+    );
     await this._registrationRequestRepository.save(registrationRequest);
 
     // Publish registration events
@@ -91,11 +97,11 @@ export class SubmitRegistrationUseCase {
 
     return {
       user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        status: user.status,
+        id: savedUser.id,
+        username: savedUser.username,
+        email: savedUser.email,
+        role: savedUser.role,
+        status: savedUser.status,
       },
       registrationRequest: {
         id: registrationRequest.id,
@@ -104,4 +110,3 @@ export class SubmitRegistrationUseCase {
     };
   }
 }
-
