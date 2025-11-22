@@ -9,7 +9,7 @@ export const createAdminRoutes = (adminController) => {
 
   // Tất cả routes đều cần authenticate và là admin
   router.use(authenticate);
-  router.use(authorize("admin"));
+  router.use(authorize("system_admin"));
 
   /**
    * @swagger
