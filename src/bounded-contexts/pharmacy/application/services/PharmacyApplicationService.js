@@ -42,18 +42,30 @@ export class PharmacyApplicationService {
   }
 
   async getInvoicesFromDistributor(pharmacyId, filters = {}) {
-    return await this._commercialInvoiceRepository.findByPharmacy(pharmacyId, filters);
+    return await this._commercialInvoiceRepository.findByPharmacy(
+      pharmacyId,
+      filters
+    );
   }
 
   async getReceiptHistory(pharmacyId, filters = {}) {
-    return await this._proofOfPharmacyRepository.findByPharmacy(pharmacyId, filters);
+    return await this._proofOfPharmacyRepository.findByPharmacy(
+      pharmacyId,
+      filters
+    );
   }
 
   async getStatistics(pharmacyId) {
-    // Import old models for statistics
-    const CommercialInvoiceModel = (await import("../../../../models/CommercialInvoice.js")).default;
-    const ProofOfPharmacyModel = (await import("../../../../models/ProofOfPharmacy.js")).default;
-    const NFTInfoModel = (await import("../../../../models/NFTInfo.js")).default;
+    // Import models for statistics
+    const { CommercialInvoiceModel } = await import(
+      "../../../distributor/infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
+    const { ProofOfPharmacyModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfPharmacySchema.js"
+    );
+    const { NFTInfoModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js"
+    );
 
     // Count invoices from distributor
     const totalInvoices = await CommercialInvoiceModel.countDocuments({
@@ -144,24 +156,47 @@ export class PharmacyApplicationService {
   }
 
   async trackDrugByTokenId(pharmacyId, tokenId) {
-    const PublicTrackingApplicationService = (await import("../../../public/application/services/PublicTrackingApplicationService.js")).PublicTrackingApplicationService;
-    const publicBlockchainService = (await import("../../../public/infrastructure/blockchain/BlockchainService.js")).BlockchainService;
-    const drugInfoRepository = (await import("../../../supply-chain/infrastructure/persistence/mongoose/DrugInfoRepository.js")).DrugInfoRepository;
-    const proofOfProductionRepository = (await import("../../../supply-chain/infrastructure/persistence/mongoose/ProofOfProductionRepository.js")).ProofOfProductionRepository;
-    const proofOfDistributionRepository = (await import("../../../distributor/infrastructure/persistence/mongoose/ProofOfDistributionRepository.js")).ProofOfDistributionRepository;
-    const manufacturerInvoiceRepository = (await import("../../../supply-chain/infrastructure/persistence/mongoose/ManufacturerInvoiceRepository.js")).ManufacturerInvoiceRepository;
-    const commercialInvoiceRepository = (await import("../../../distributor/infrastructure/persistence/mongoose/CommercialInvoiceRepository.js")).CommercialInvoiceRepository;
+    // Use injected repositories if available, otherwise create new instances
+    const { PublicTrackingApplicationService } = await import(
+      "../../../public/application/services/PublicTrackingApplicationService.js"
+    );
+    const { BlockchainService } = await import(
+      "../../../public/infrastructure/blockchain/BlockchainService.js"
+    );
+
+    // Use injected drugInfoRepository if available
+    let drugInfoRepo = this._drugInfoRepository;
+    if (!drugInfoRepo) {
+      const { DrugInfoRepository } = await import(
+        "../../../supply-chain/infrastructure/persistence/mongoose/DrugInfoRepository.js"
+      );
+      drugInfoRepo = new DrugInfoRepository();
+    }
+
+    // Create other repositories as needed
+    const { ProofOfProductionRepository } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/ProofOfProductionRepository.js"
+    );
+    const { ProofOfDistributionRepository } = await import(
+      "../../../distributor/infrastructure/persistence/mongoose/ProofOfDistributionRepository.js"
+    );
+    const { ManufacturerInvoiceRepository } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/ManufacturerInvoiceRepository.js"
+    );
+    const { CommercialInvoiceRepository } = await import(
+      "../../../distributor/infrastructure/persistence/mongoose/CommercialInvoiceRepository.js"
+    );
 
     // Use PublicTrackingService to get tracking info
     const publicTrackingService = new PublicTrackingApplicationService(
       this._nftRepository,
-      new drugInfoRepository(),
-      new proofOfProductionRepository(),
-      new proofOfDistributionRepository(),
+      drugInfoRepo,
+      new ProofOfProductionRepository(),
+      new ProofOfDistributionRepository(),
       this._proofOfPharmacyRepository,
-      new manufacturerInvoiceRepository(),
-      new commercialInvoiceRepository(),
-      new publicBlockchainService()
+      new ManufacturerInvoiceRepository(),
+      new CommercialInvoiceRepository(),
+      new BlockchainService()
     );
 
     return await publicTrackingService.trackDrugByTokenId(tokenId);
@@ -171,25 +206,31 @@ export class PharmacyApplicationService {
     // Use injected repository if available, otherwise create new instance
     let repo = this._drugInfoRepository;
     if (!repo) {
-      const DrugInfoRepository = (await import("../../../supply-chain/infrastructure/persistence/mongoose/DrugInfoRepository.js")).DrugInfoRepository;
+      const DrugInfoRepository = (
+        await import(
+          "../../../supply-chain/infrastructure/persistence/mongoose/DrugInfoRepository.js"
+        )
+      ).DrugInfoRepository;
       repo = new DrugInfoRepository();
     }
 
     const drugs = await repo.findAll(filters);
-    
+
     // Filter by status if provided
     let filtered = drugs;
     if (filters.status) {
-      filtered = filtered.filter(d => d.status === filters.status);
+      filtered = filtered.filter((d) => d.status === filters.status);
     }
-    
+
     // Filter by search if provided
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      filtered = filtered.filter(d => 
-        d.drugName?.toLowerCase().includes(searchLower) ||
-        (d.genericName && d.genericName.toLowerCase().includes(searchLower)) ||
-        d.atcCode?.toLowerCase().includes(searchLower)
+      filtered = filtered.filter(
+        (d) =>
+          d.drugName?.toLowerCase().includes(searchLower) ||
+          (d.genericName &&
+            d.genericName.toLowerCase().includes(searchLower)) ||
+          d.atcCode?.toLowerCase().includes(searchLower)
       );
     }
 
@@ -200,12 +241,16 @@ export class PharmacyApplicationService {
     // Use injected repository if available, otherwise create new instance
     let repo = this._drugInfoRepository;
     if (!repo) {
-      const DrugInfoRepository = (await import("../../../supply-chain/infrastructure/persistence/mongoose/DrugInfoRepository.js")).DrugInfoRepository;
+      const DrugInfoRepository = (
+        await import(
+          "../../../supply-chain/infrastructure/persistence/mongoose/DrugInfoRepository.js"
+        )
+      ).DrugInfoRepository;
       repo = new DrugInfoRepository();
     }
 
     const drug = await repo.findByATCCode(atcCode);
-    
+
     if (!drug) {
       throw new Error(`Không tìm thấy thuốc với ATC code ${atcCode}`);
     }
@@ -215,12 +260,22 @@ export class PharmacyApplicationService {
 
   async getProfile(pharmacyId, user) {
     // Get business entity
-    const BusinessEntityFactory = (await import("../../../../services/factories/BusinessEntityFactory.js")).BusinessEntityFactory;
-    const pharmacy = await BusinessEntityFactory.getBusinessEntityWithValidation(user, "pharmacy");
-    
+    const { BusinessEntityFactory } = await import(
+      "../../../registration/infrastructure/persistence/BusinessEntityFactory.js"
+    );
+    const pharmacy =
+      await BusinessEntityFactory.getBusinessEntityWithValidation(
+        user,
+        "pharmacy"
+      );
+
     // Get user info
-    const UserModel = (await import("../../../../models/User.js")).default;
-    const userInfo = await UserModel.findById(user._id || user.id).select("-password");
+    const { UserModel } = await import(
+      "../../../identity-access/infrastructure/persistence/mongoose/schemas/UserSchema.js"
+    );
+    const userInfo = await UserModel.findById(user._id || user.id).select(
+      "-password"
+    );
 
     return {
       user: userInfo ? userInfo.toObject() : user,
@@ -229,9 +284,15 @@ export class PharmacyApplicationService {
   }
 
   async getChartOneWeek(pharmacyId) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const CommercialInvoiceModel = (await import("../../../../models/CommercialInvoice.js")).default;
+    const { default: DateHelper } = await import(
+      "../../../../shared-kernel/utils/DateHelper.js"
+    );
+    const { default: DataAggregationService } = await import(
+      "../../../../shared-kernel/utils/DataAggregationService.js"
+    );
+    const { CommercialInvoiceModel } = await import(
+      "../../../distributor/infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
 
     const { start: sevenDaysAgo } = DateHelper.getWeekRange();
     const invoices = await CommercialInvoiceModel.find({
@@ -255,9 +316,15 @@ export class PharmacyApplicationService {
   }
 
   async getChartTodayYesterday(pharmacyId) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const CommercialInvoiceModel = (await import("../../../../models/CommercialInvoice.js")).default;
+    const { default: DateHelper } = await import(
+      "../../../../shared-kernel/utils/DateHelper.js"
+    );
+    const { default: StatisticsCalculationService } = await import(
+      "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+    );
+    const { CommercialInvoiceModel } = await import(
+      "../../../distributor/infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
 
     const { start: startOfToday } = DateHelper.getTodayRange();
     const { start: startOfYesterday } = DateHelper.getYesterdayRange();
@@ -275,10 +342,11 @@ export class PharmacyApplicationService {
     });
 
     // Tính chênh lệch và phần trăm thay đổi
-    const { diff, percentChange } = StatisticsCalculationService.calculateTodayYesterdayStats(
-      todayCount,
-      yesterdayCount
-    );
+    const { diff, percentChange } =
+      StatisticsCalculationService.calculateTodayYesterdayStats(
+        todayCount,
+        yesterdayCount
+      );
 
     const todayInvoices = await CommercialInvoiceModel.find({
       toPharmacy: pharmacyId,
@@ -305,10 +373,18 @@ export class PharmacyApplicationService {
   }
 
   async getInvoicesByDateRange(pharmacyId, startDate, endDate) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const CommercialInvoiceModel = (await import("../../../../models/CommercialInvoice.js")).default;
+    const { default: DateHelper } = await import(
+      "../../../../shared-kernel/utils/DateHelper.js"
+    );
+    const { default: DataAggregationService } = await import(
+      "../../../../shared-kernel/utils/DataAggregationService.js"
+    );
+    const { default: StatisticsCalculationService } = await import(
+      "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+    );
+    const { CommercialInvoiceModel } = await import(
+      "../../../distributor/infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
 
     const { start, end } = DateHelper.parseDateRange(startDate, endDate);
 
@@ -325,7 +401,10 @@ export class PharmacyApplicationService {
       .sort({ createdAt: -1 });
 
     // Tính tổng số lượng
-    const totalQuantity = DataAggregationService.calculateTotalQuantity(invoices, 'quantity');
+    const totalQuantity = DataAggregationService.calculateTotalQuantity(
+      invoices,
+      "quantity"
+    );
 
     // Group theo ngày để dễ vẽ biểu đồ
     const dailyStats = DataAggregationService.groupInvoicesByDate(invoices);
@@ -341,7 +420,10 @@ export class PharmacyApplicationService {
       summary: {
         totalInvoices: invoices.length,
         totalQuantity,
-        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(invoices.length, days),
+        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(
+          invoices.length,
+          days
+        ),
       },
       dailyStats,
       invoices,
@@ -349,26 +431,41 @@ export class PharmacyApplicationService {
   }
 
   async getReceiptsByDateRange(pharmacyId, startDate, endDate) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
+    const { default: DateHelper } = await import(
+      "../../../../shared-kernel/utils/DateHelper.js"
+    );
+    const { default: DataAggregationService } = await import(
+      "../../../../shared-kernel/utils/DataAggregationService.js"
+    );
+    const { default: StatisticsCalculationService } = await import(
+      "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+    );
 
     const { start, end } = DateHelper.parseDateRange(startDate, endDate);
 
     // Query receipts trong khoảng thời gian
-    const receipts = await this._proofOfPharmacyRepository.findByPharmacy(pharmacyId, {
-      startDate: start,
-      endDate: end,
-    });
+    const receipts = await this._proofOfPharmacyRepository.findByPharmacy(
+      pharmacyId,
+      {
+        startDate: start,
+        endDate: end,
+      }
+    );
 
     // Convert to array if needed
-    const receiptsArray = Array.isArray(receipts) ? receipts : [receipts].filter(Boolean);
+    const receiptsArray = Array.isArray(receipts)
+      ? receipts
+      : [receipts].filter(Boolean);
 
     // Tính tổng số lượng
-    const totalQuantity = DataAggregationService.calculateTotalQuantity(receiptsArray, 'receivedQuantity');
+    const totalQuantity = DataAggregationService.calculateTotalQuantity(
+      receiptsArray,
+      "receivedQuantity"
+    );
 
     // Group theo ngày để dễ vẽ biểu đồ
-    const dailyStats = DataAggregationService.groupReceiptsByDate(receiptsArray);
+    const dailyStats =
+      DataAggregationService.groupReceiptsByDate(receiptsArray);
 
     const days = DateHelper.getDaysDifference(start, end);
 
@@ -381,7 +478,10 @@ export class PharmacyApplicationService {
       summary: {
         totalReceipts: receiptsArray.length,
         totalQuantity,
-        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(receiptsArray.length, days),
+        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(
+          receiptsArray.length,
+          days
+        ),
       },
       dailyStats,
       receipts: receiptsArray,
@@ -394,7 +494,11 @@ export class PharmacyApplicationService {
   }
 
   async confirmContract(dto, pharmacyId, pharmacyPrivateKey) {
-    return await this._confirmContractUseCase.execute(dto, pharmacyId, pharmacyPrivateKey);
+    return await this._confirmContractUseCase.execute(
+      dto,
+      pharmacyId,
+      pharmacyPrivateKey
+    );
   }
 
   async getContracts(pharmacyId, filters = {}) {
@@ -403,7 +507,7 @@ export class PharmacyApplicationService {
 
   async getContractDetail(pharmacyId, contractId) {
     const contract = await this._contractRepository.findById(contractId);
-    
+
     if (!contract) {
       throw new Error("Không tìm thấy contract");
     }
@@ -416,7 +520,9 @@ export class PharmacyApplicationService {
   }
 
   async getContractInfoFromBlockchain(pharmacyAddress, distributorAddress) {
-    return await this._contractBlockchainService.getContractInfoByPharmacy(pharmacyAddress, distributorAddress);
+    return await this._contractBlockchainService.getContractInfoByPharmacy(
+      pharmacyAddress,
+      distributorAddress
+    );
   }
 }
-

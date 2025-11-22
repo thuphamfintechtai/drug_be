@@ -76,20 +76,25 @@ export class ProductionApplicationService {
   }
 
   async getProductionHistory(manufacturerId, filters = {}) {
-    const productions = await this._proofOfProductionRepository.findByManufacturer(manufacturerId);
-    
+    const productions =
+      await this._proofOfProductionRepository.findByManufacturer(
+        manufacturerId
+      );
+
     let filtered = productions;
-    
+
     if (filters.status) {
-      filtered = filtered.filter(p => p.status === filters.status);
+      filtered = filtered.filter((p) => p.status === filters.status);
     }
-    
+
     if (filters.batchNumber) {
-      filtered = filtered.filter(p => p.batchNumber.includes(filters.batchNumber));
+      filtered = filtered.filter((p) =>
+        p.batchNumber.includes(filters.batchNumber)
+      );
     }
 
     if (filters.startDate && filters.endDate) {
-      filtered = filtered.filter(p => {
+      filtered = filtered.filter((p) => {
         const date = p.createdAt;
         return date >= filters.startDate && date <= filters.endDate;
       });
@@ -99,14 +104,24 @@ export class ProductionApplicationService {
   }
 
   async getStatistics(manufacturerId) {
-    // Import old models for statistics
-    const DrugInfoModel = (await import("../../../../models/DrugInfo.js")).default;
-    const ProofOfProductionModel = (await import("../../../../models/ProofOfProduction.js")).default;
-    const ManufacturerInvoiceModel = (await import("../../../../models/ManufacturerInvoice.js")).default;
-    const NFTInfoModel = (await import("../../../../models/NFTInfo.js")).default;
+    // Import models for statistics
+    const { DrugInfoModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/DrugInfoSchema.js"
+    );
+    const { ProofOfProductionModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfProductionSchema.js"
+    );
+    const { ManufacturerInvoiceModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
+    const { NFTInfoModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js"
+    );
 
     // Count drugs
-    const totalDrugs = await DrugInfoModel.countDocuments({ manufacturer: manufacturerId });
+    const totalDrugs = await DrugInfoModel.countDocuments({
+      manufacturer: manufacturerId,
+    });
     const activeDrugs = await DrugInfoModel.countDocuments({
       manufacturer: manufacturerId,
       status: "active",
@@ -122,7 +137,9 @@ export class ProductionApplicationService {
     });
 
     // Count NFTs - only for drugs from this manufacturer
-    const companyDrugIds = await DrugInfoModel.find({ manufacturer: manufacturerId }).distinct("_id");
+    const companyDrugIds = await DrugInfoModel.find({
+      manufacturer: manufacturerId,
+    }).distinct("_id");
     const nfts = await NFTInfoModel.find({
       drug: { $in: companyDrugIds },
     });
@@ -181,12 +198,22 @@ export class ProductionApplicationService {
 
   async getProfile(manufacturerId, user) {
     // Get business entity
-    const BusinessEntityFactory = (await import("../../../../services/factories/BusinessEntityFactory.js")).BusinessEntityFactory;
-    const pharmaCompany = await BusinessEntityFactory.getBusinessEntityWithValidation(user, "pharma_company");
-    
+    const { BusinessEntityFactory } = await import(
+      "../../../registration/infrastructure/persistence/BusinessEntityFactory.js"
+    );
+    const pharmaCompany =
+      await BusinessEntityFactory.getBusinessEntityWithValidation(
+        user,
+        "pharma_company"
+      );
+
     // Get user info
-    const UserModel = (await import("../../../../models/User.js")).default;
-    const userInfo = await UserModel.findById(user._id || user.id).select("-password");
+    const { UserModel } = await import(
+      "../../../identity-access/infrastructure/persistence/mongoose/schemas/UserSchema.js"
+    );
+    const userInfo = await UserModel.findById(user._id || user.id).select(
+      "-password"
+    );
 
     return {
       user: userInfo ? userInfo.toObject() : user,
@@ -195,10 +222,12 @@ export class ProductionApplicationService {
   }
 
   async getDistributors(filters = {}) {
-    const DistributorModel = (await import("../../../../models/Distributor.js")).default;
-    
+    const { DistributorModel } = await import(
+      "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+    );
+
     const query = { status: filters.status || "active" };
-    
+
     if (filters.search) {
       query.$or = [
         { name: { $regex: filters.search, $options: "i" } },
@@ -229,21 +258,29 @@ export class ProductionApplicationService {
   }
 
   async getTransferHistory(manufacturerId, filters = {}) {
-    const invoices = await this._manufacturerInvoiceRepository.findByManufacturer(manufacturerId, filters);
+    const invoices =
+      await this._manufacturerInvoiceRepository.findByManufacturer(
+        manufacturerId,
+        filters
+      );
     return invoices;
   }
 
   async getAvailableTokensForProduction(proofOfProductionId) {
-    const proof = await this._proofOfProductionRepository.findById(proofOfProductionId);
+    const proof = await this._proofOfProductionRepository.findById(
+      proofOfProductionId
+    );
     if (!proof) {
       throw new Error("ProofOfProduction không tồn tại");
     }
 
-    const nfts = await this._nftRepository.findByProofOfProduction(proofOfProductionId);
-    
+    const nfts = await this._nftRepository.findByProofOfProduction(
+      proofOfProductionId
+    );
+
     // Filter NFTs that can still be transferred (minted or transferred status)
-    const availableNFTs = nfts.filter(nft => 
-      nft.status === "minted" || nft.status === "transferred"
+    const availableNFTs = nfts.filter(
+      (nft) => nft.status === "minted" || nft.status === "transferred"
     );
 
     return {
@@ -252,14 +289,20 @@ export class ProductionApplicationService {
       totalQuantity: proof.quantity,
       totalNFTs: nfts.length,
       availableNFTs: availableNFTs.length,
-      tokenIds: availableNFTs.map(nft => nft.tokenId),
+      tokenIds: availableNFTs.map((nft) => nft.tokenId),
     };
   }
 
   async getChartOneWeek(manufacturerId) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const ProofOfProductionModel = (await import("../../../../models/ProofOfProduction.js")).default;
+    const { default: DateHelper } = await import(
+      "../../../../shared-kernel/utils/DateHelper.js"
+    );
+    const { default: DataAggregationService } = await import(
+      "../../../../shared-kernel/utils/DataAggregationService.js"
+    );
+    const { ProofOfProductionModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfProductionSchema.js"
+    );
 
     const { start: sevenDaysAgo } = DateHelper.getWeekRange();
     const productions = await ProofOfProductionModel.find({
@@ -270,7 +313,8 @@ export class ProductionApplicationService {
       .sort({ createdAt: -1 });
 
     // Group theo ngày
-    const dailyStats = DataAggregationService.groupProductionsByDate(productions);
+    const dailyStats =
+      DataAggregationService.groupProductionsByDate(productions);
 
     return {
       productions,
@@ -282,9 +326,15 @@ export class ProductionApplicationService {
   }
 
   async getChartTodayYesterday(manufacturerId) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const ProofOfProductionModel = (await import("../../../../models/ProofOfProduction.js")).default;
+    const { default: DateHelper } = await import(
+      "../../../../shared-kernel/utils/DateHelper.js"
+    );
+    const { default: StatisticsCalculationService } = await import(
+      "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+    );
+    const { ProofOfProductionModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfProductionSchema.js"
+    );
 
     const { start: startOfToday } = DateHelper.getTodayRange();
     const { start: startOfYesterday } = DateHelper.getYesterdayRange();
@@ -302,10 +352,11 @@ export class ProductionApplicationService {
     });
 
     // Tính chênh lệch và phần trăm thay đổi
-    const { diff, percentChange } = StatisticsCalculationService.calculateTodayYesterdayStats(
-      todayCount,
-      yesterdayCount
-    );
+    const { diff, percentChange } =
+      StatisticsCalculationService.calculateTodayYesterdayStats(
+        todayCount,
+        yesterdayCount
+      );
 
     const todayProductions = await ProofOfProductionModel.find({
       manufacturer: manufacturerId,
@@ -331,30 +382,44 @@ export class ProductionApplicationService {
   }
 
   async getProductionsByDateRange(manufacturerId, startDate, endDate) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const ProofOfProductionModel = (await import("../../../../models/ProofOfProduction.js")).default;
-    const BusinessEntityFactory = (await import("../../../../services/factories/BusinessEntityFactory.js")).BusinessEntityFactory;
+    const { default: DateHelper } = await import(
+      "../../../../shared-kernel/utils/DateHelper.js"
+    );
+    const { default: DataAggregationService } = await import(
+      "../../../../shared-kernel/utils/DataAggregationService.js"
+    );
+    const { default: StatisticsCalculationService } = await import(
+      "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+    );
+    const { ProofOfProductionModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfProductionSchema.js"
+    );
+    const { BusinessEntityFactory } = await import(
+      "../../../registration/infrastructure/persistence/BusinessEntityFactory.js"
+    );
 
     const { start, end } = DateHelper.parseDateRange(startDate, endDate);
 
     // Query productions trong khoảng thời gian
     const productions = await ProofOfProductionModel.find({
       manufacturer: manufacturerId,
-      createdAt: { 
+      createdAt: {
         $gte: start,
-        $lte: end 
-      }
+        $lte: end,
+      },
     })
-    .populate("drug", "tradeName atcCode")
-    .sort({ createdAt: -1 });
+      .populate("drug", "tradeName atcCode")
+      .sort({ createdAt: -1 });
 
     // Tính tổng số lượng sản xuất
-    const totalQuantity = DataAggregationService.calculateTotalQuantity(productions, 'quantity');
+    const totalQuantity = DataAggregationService.calculateTotalQuantity(
+      productions,
+      "quantity"
+    );
 
     // Group theo ngày để dễ vẽ biểu đồ
-    const dailyStats = DataAggregationService.groupProductionsByDate(productions);
+    const dailyStats =
+      DataAggregationService.groupProductionsByDate(productions);
 
     const days = DateHelper.getDaysDifference(start, end);
 
@@ -362,41 +427,55 @@ export class ProductionApplicationService {
       dateRange: {
         from: start,
         to: end,
-        days
+        days,
       },
       summary: {
         totalProductions: productions.length,
         totalQuantity,
-        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(productions.length, days)
+        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(
+          productions.length,
+          days
+        ),
       },
       dailyStats,
-      productions
+      productions,
     };
   }
 
   async getDistributionsByDateRange(manufacturerId, startDate, endDate) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const ProofOfDistributionModel = (await import("../../../../models/ProofOfDistribution.js")).default;
+    const { default: DateHelper } = await import(
+      "../../../../shared-kernel/utils/DateHelper.js"
+    );
+    const { default: DataAggregationService } = await import(
+      "../../../../shared-kernel/utils/DataAggregationService.js"
+    );
+    const { default: StatisticsCalculationService } = await import(
+      "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+    );
+    const { ProofOfDistributionModel } = await import(
+      "../../../distributor/infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js"
+    );
 
     const { start, end } = DateHelper.parseDateRange(startDate, endDate);
 
     // Query distributions trong khoảng thời gian
     const distributions = await ProofOfDistributionModel.find({
       fromManufacturer: manufacturerId,
-      createdAt: { 
+      createdAt: {
         $gte: start,
-        $lte: end 
-      }
-    })
-    .sort({ createdAt: -1 });
+        $lte: end,
+      },
+    }).sort({ createdAt: -1 });
 
     // Tính tổng số lượng
-    const totalQuantity = DataAggregationService.calculateTotalQuantity(distributions, 'quantity');
+    const totalQuantity = DataAggregationService.calculateTotalQuantity(
+      distributions,
+      "quantity"
+    );
 
     // Group theo ngày để dễ vẽ biểu đồ
-    const dailyStats = DataAggregationService.groupDistributionsByDate(distributions);
+    const dailyStats =
+      DataAggregationService.groupDistributionsByDate(distributions);
 
     const days = DateHelper.getDaysDifference(start, end);
 
@@ -404,23 +483,34 @@ export class ProductionApplicationService {
       dateRange: {
         from: start,
         to: end,
-        days
+        days,
       },
       summary: {
         totalDistribution: distributions.length,
         totalQuantity,
-        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(distributions.length, days)
+        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(
+          distributions.length,
+          days
+        ),
       },
       dailyStats,
-      distributions
+      distributions,
     };
   }
 
   async getTransfersByDateRange(manufacturerId, startDate, endDate) {
-    const DateHelper = (await import("../../../../services/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../services/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../services/utils/StatisticsCalculationService.js")).default;
-    const ManufacturerInvoiceModel = (await import("../../../../models/ManufacturerInvoice.js")).default;
+    const { default: DateHelper } = await import(
+      "../../../../shared-kernel/utils/DateHelper.js"
+    );
+    const { default: DataAggregationService } = await import(
+      "../../../../shared-kernel/utils/DataAggregationService.js"
+    );
+    const { default: StatisticsCalculationService } = await import(
+      "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+    );
+    const { ManufacturerInvoiceModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
 
     if (!startDate || !endDate) {
       throw new Error("Vui lòng cung cấp startDate và endDate");
@@ -449,10 +539,14 @@ export class ProductionApplicationService {
       .sort({ createdAt: -1 });
 
     // Tính tổng số lượng
-    const totalQuantity = DataAggregationService.calculateTotalQuantity(manufacturerInvoices, 'quantity');
+    const totalQuantity = DataAggregationService.calculateTotalQuantity(
+      manufacturerInvoices,
+      "quantity"
+    );
 
     // Group theo ngày để dễ vẽ biểu đồ
-    const dailyStats = DataAggregationService.groupInvoicesByDate(manufacturerInvoices);
+    const dailyStats =
+      DataAggregationService.groupInvoicesByDate(manufacturerInvoices);
 
     const days = DateHelper.getDaysDifference(start, end);
 
@@ -465,7 +559,10 @@ export class ProductionApplicationService {
       summary: {
         totalTransfers: manufacturerInvoices.length,
         totalQuantity,
-        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(manufacturerInvoices.length, days),
+        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(
+          manufacturerInvoices.length,
+          days
+        ),
       },
       dailyStats,
       transfers: manufacturerInvoices,
@@ -473,11 +570,20 @@ export class ProductionApplicationService {
   }
 
   async getIPFSStatus(manufacturerId, user) {
-    const { PharmaCompanyModel } = (await import("../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"));
-    const ManufactureIPFSStatusModel = (await import("../../../../models/manufactureIPFSStatus.js")).default;
+    // TODO: ManufactureIPFSStatusModel schema needs to be created
+    throw new Error(
+      "ManufactureIPFSStatus model chưa được migrate. Vui lòng liên hệ admin."
+    );
+
+    // const { PharmaCompanyModel } = await import(
+    //   "../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+    // );
+    // const ManufactureIPFSStatusModel = (
+    //   await import("../../../../models/manufactureIPFSStatus.js")
+    // ).default;
 
     const findManufacture = await PharmaCompanyModel.findOne({
-      user: user._id || user.id
+      user: user._id || user.id,
     });
 
     if (!findManufacture) {
@@ -485,7 +591,7 @@ export class ProductionApplicationService {
     }
 
     const findManufactureIPFSStatus = await ManufactureIPFSStatusModel.find({
-      manufacture: findManufacture._id
+      manufacture: findManufacture._id,
     });
 
     if (!findManufactureIPFSStatus || findManufactureIPFSStatus.length === 0) {
@@ -494,16 +600,25 @@ export class ProductionApplicationService {
 
     return {
       manufacture: findManufacture,
-      ipfsStatuses: findManufactureIPFSStatus
+      ipfsStatuses: findManufactureIPFSStatus,
     };
   }
 
   async getIPFSStatusUndone(manufacturerId, user) {
-    const { PharmaCompanyModel } = (await import("../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"));
-    const ManufactureIPFSStatusModel = (await import("../../../../models/manufactureIPFSStatus.js")).default;
+    // TODO: ManufactureIPFSStatusModel schema needs to be created
+    throw new Error(
+      "ManufactureIPFSStatus model chưa được migrate. Vui lòng liên hệ admin."
+    );
+
+    // const { PharmaCompanyModel } = await import(
+    //   "../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+    // );
+    // const ManufactureIPFSStatusModel = (
+    //   await import("../../../../models/manufactureIPFSStatus.js")
+    // ).default;
 
     const manufacturer = await PharmaCompanyModel.findOne({
-      user: user._id || user.id
+      user: user._id || user.id,
     });
 
     if (!manufacturer) {
@@ -513,7 +628,7 @@ export class ProductionApplicationService {
     // Find IPFS statuses that are not "SuccessFully"
     const manufacturerIPFSStatuses = await ManufactureIPFSStatusModel.find({
       manufacture: manufacturer._id,
-      status: { $ne: "SuccessFully" }
+      status: { $ne: "SuccessFully" },
     });
 
     if (!manufacturerIPFSStatuses || manufacturerIPFSStatuses.length === 0) {
@@ -522,8 +637,7 @@ export class ProductionApplicationService {
 
     return {
       manufacture: manufacturer,
-      ipfsStatuses: manufacturerIPFSStatuses
+      ipfsStatuses: manufacturerIPFSStatuses,
     };
   }
 }
-
