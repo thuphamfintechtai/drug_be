@@ -1024,5 +1024,196 @@ export const createDistributorRoutes = (distributorController) => {
     distributorController.getTransfersToPharmacyByDateRange(req, res)
   );
 
+  /**
+   * @swagger
+   * /api/distributor/chart/monthly-trends:
+   *   get:
+   *     summary: Lấy xu hướng theo tháng
+   *     tags: [Distributor]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: months
+   *         schema:
+   *           type: integer
+   *           default: 6
+   *         description: Số tháng cần xem (1-24)
+   *     responses:
+   *       200:
+   *         description: Xu hướng theo tháng
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     dateRange:
+   *                       type: object
+   *                       properties:
+   *                         from:
+   *                           type: string
+   *                           format: date-time
+   *                         to:
+   *                           type: string
+   *                           format: date-time
+   *                         months:
+   *                           type: integer
+   *                     summary:
+   *                       type: object
+   *                       properties:
+   *                         totalInvoicesReceived:
+   *                           type: integer
+   *                         totalInvoicesReceivedQuantity:
+   *                           type: integer
+   *                         totalDistributions:
+   *                           type: integer
+   *                         totalDistributionsQuantity:
+   *                           type: integer
+   *                         totalTransfersToPharmacy:
+   *                           type: integer
+   *                         totalTransfersToPharmacyQuantity:
+   *                           type: integer
+   *                     trends:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                         properties:
+   *                           month:
+   *                             type: string
+   *                             example: "2024-11"
+   *                           year:
+   *                             type: integer
+   *                           monthNumber:
+   *                             type: integer
+   *                           invoicesReceived:
+   *                             type: integer
+   *                           invoicesReceivedQuantity:
+   *                             type: integer
+   *                           distributions:
+   *                             type: integer
+   *                           distributionsQuantity:
+   *                             type: integer
+   *                           transfersToPharmacy:
+   *                             type: integer
+   *                           transfersToPharmacyQuantity:
+   *                             type: integer
+   *       400:
+   *         description: Tham số không hợp lệ
+   *       500:
+   *         description: Lỗi server
+   */
+  router.get("/chart/monthly-trends", (req, res) =>
+    distributorController.getMonthlyTrends(req, res)
+  );
+
+  /**
+   * @swagger
+   * /api/distributor/dashboard/stats:
+   *   get:
+   *     summary: Lấy thống kê tổng quan cho dashboard
+   *     tags: [Distributor]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Thống kê dashboard
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     overview:
+   *                       type: object
+   *                       properties:
+   *                         invoicesReceived:
+   *                           type: object
+   *                           properties:
+   *                             total:
+   *                               type: integer
+   *                             today:
+   *                               type: integer
+   *                             yesterday:
+   *                               type: integer
+   *                             thisWeek:
+   *                               type: integer
+   *                             todayVsYesterday:
+   *                               type: object
+   *                               properties:
+   *                                 diff:
+   *                                   type: integer
+   *                                 percentChange:
+   *                                   type: number
+   *                             byStatus:
+   *                               type: object
+   *                         distributions:
+   *                           type: object
+   *                           properties:
+   *                             total:
+   *                               type: integer
+   *                             today:
+   *                               type: integer
+   *                             yesterday:
+   *                               type: integer
+   *                             thisWeek:
+   *                               type: integer
+   *                             todayVsYesterday:
+   *                               type: object
+   *                             byStatus:
+   *                               type: object
+   *                         transfersToPharmacy:
+   *                           type: object
+   *                           properties:
+   *                             total:
+   *                               type: integer
+   *                             today:
+   *                               type: integer
+   *                             yesterday:
+   *                               type: integer
+   *                             thisWeek:
+   *                               type: integer
+   *                             todayVsYesterday:
+   *                               type: object
+   *                             byStatus:
+   *                               type: object
+   *                         nfts:
+   *                           type: object
+   *                           properties:
+   *                             total:
+   *                               type: integer
+   *                             byStatus:
+   *                               type: object
+   *                     recentActivities:
+   *                       type: object
+   *                       properties:
+   *                         recentInvoices:
+   *                           type: array
+   *                           items:
+   *                             type: object
+   *                         recentTransfers:
+   *                           type: array
+   *                           items:
+   *                             type: object
+   *                     timestamp:
+   *                       type: string
+   *                       format: date-time
+   *       500:
+   *         description: Lỗi server
+   */
+  router.get("/dashboard/stats", (req, res) =>
+    distributorController.getDashboardStats(req, res)
+  );
+
   return router;
 };

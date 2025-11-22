@@ -972,5 +972,67 @@ export class DistributorController {
       });
     }
   }
+
+  async getMonthlyTrends(req, res) {
+    try {
+      const distributorId = req.user?._id?.toString();
+      const { months } = req.query;
+
+      if (!distributorId) {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ có distributor mới có thể xem monthly trends",
+        });
+      }
+
+      const result = await this._distributorService.getMonthlyTrends(distributorId, months || 6);
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      if (error.message && error.message.includes("Số tháng")) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      console.error("Lỗi khi lấy monthly trends:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi lấy monthly trends",
+        error: error.message,
+      });
+    }
+  }
+
+  async getDashboardStats(req, res) {
+    try {
+      const distributorId = req.user?._id?.toString();
+
+      if (!distributorId) {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ có distributor mới có thể xem dashboard stats",
+        });
+      }
+
+      const result = await this._distributorService.getDashboardStats(distributorId);
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error("Lỗi khi lấy dashboard stats:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi lấy dashboard stats",
+        error: error.message,
+      });
+    }
+  }
 }
 

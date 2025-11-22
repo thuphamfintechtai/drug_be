@@ -633,5 +633,361 @@ export class DistributorApplicationService {
   async getContractInfoFromBlockchain(distributorAddress, pharmacyAddress) {
     return await this._contractBlockchainService.getContractInfoByDistributor(distributorAddress, pharmacyAddress);
   }
+
+  async getMonthlyTrends(distributorId, months = 6) {
+    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
+    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
+    const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
+
+    // Validate months parameter
+    const numMonths = parseInt(months);
+    if (isNaN(numMonths) || numMonths < 1 || numMonths > 24) {
+      throw new Error("Số tháng phải từ 1 đến 24");
+    }
+    const endDate = new Date();
+    endDate.setHours(23, 59, 59, 999);
+
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - numMonths);
+    startDate.setDate(1);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Query invoices from manufacturer
+    const invoicesFromManufacturer = await ManufacturerInvoiceModel.find({
+      toDistributor: distributorId,
+      createdAt: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    }).sort({ createdAt: 1 });
+
+    // Query distributions
+    const distributions = await ProofOfDistributionModel.find({
+      toDistributor: distributorId,
+      createdAt: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    }).sort({ createdAt: 1 });
+
+    // Query transfers to pharmacy
+    const transfersToPharmacy = await CommercialInvoiceModel.find({
+      fromDistributor: distributorId,
+      createdAt: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    }).sort({ createdAt: 1 });
+
+    // Group by month
+    const monthlyData = {};
+
+    // Initialize all months
+    for (let i = 0; i < numMonths; i++) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      monthlyData[monthKey] = {
+        month: monthKey,
+        year: date.getFullYear(),
+        monthNumber: date.getMonth() + 1,
+        invoicesReceived: 0,
+        invoicesReceivedQuantity: 0,
+        distributions: 0,
+        distributionsQuantity: 0,
+        transfersToPharmacy: 0,
+        transfersToPharmacyQuantity: 0,
+      };
+    }
+
+    // Aggregate invoices from manufacturer
+    invoicesFromManufacturer.forEach(invoice => {
+      const date = new Date(invoice.createdAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (monthlyData[monthKey]) {
+        monthlyData[monthKey].invoicesReceived++;
+        monthlyData[monthKey].invoicesReceivedQuantity += invoice.quantity || 0;
+      }
+    });
+
+    // Aggregate distributions
+    distributions.forEach(dist => {
+      const date = new Date(dist.createdAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (monthlyData[monthKey]) {
+        monthlyData[monthKey].distributions++;
+        monthlyData[monthKey].distributionsQuantity += dist.distributedQuantity || 0;
+      }
+    });
+
+    // Aggregate transfers to pharmacy
+    transfersToPharmacy.forEach(transfer => {
+      const date = new Date(transfer.createdAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (monthlyData[monthKey]) {
+        monthlyData[monthKey].transfersToPharmacy++;
+        monthlyData[monthKey].transfersToPharmacyQuantity += transfer.quantity || 0;
+      }
+    });
+
+    // Convert to array and sort by month (oldest first)
+    const trends = Object.values(monthlyData).sort((a, b) => {
+      return a.month.localeCompare(b.month);
+    });
+
+    return {
+      dateRange: {
+        from: startDate,
+        to: endDate,
+        months: numMonths,
+      },
+      summary: {
+        totalInvoicesReceived: invoicesFromManufacturer.length,
+        totalInvoicesReceivedQuantity: invoicesFromManufacturer.reduce((sum, inv) => sum + (inv.quantity || 0), 0),
+        totalDistributions: distributions.length,
+        totalDistributionsQuantity: distributions.reduce((sum, dist) => sum + (dist.distributedQuantity || 0), 0),
+        totalTransfersToPharmacy: transfersToPharmacy.length,
+        totalTransfersToPharmacyQuantity: transfersToPharmacy.reduce((sum, trans) => sum + (trans.quantity || 0), 0),
+      },
+      trends,
+    };
+  }
+
+  async getDashboardStats(distributorId) {
+    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
+    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
+    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
+    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
+    const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
+    const { NFTInfoModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js");
+
+    // Get date ranges
+    const { start: startOfToday } = DateHelper.getTodayRange();
+    const { start: startOfYesterday } = DateHelper.getYesterdayRange();
+    const { start: sevenDaysAgo } = DateHelper.getWeekRange();
+
+    // === INVOICES FROM MANUFACTURER ===
+    const totalInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
+      toDistributor: distributorId,
+    });
+
+    const todayInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
+      toDistributor: distributorId,
+      createdAt: { $gte: startOfToday },
+    });
+
+    const yesterdayInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
+      toDistributor: distributorId,
+      createdAt: { $gte: startOfYesterday, $lt: startOfToday },
+    });
+
+    const weekInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
+      toDistributor: distributorId,
+      createdAt: { $gte: sevenDaysAgo },
+    });
+
+    const { diff: invoicesDiff, percentChange: invoicesPercentChange } = 
+      StatisticsCalculationService.calculateTodayYesterdayStats(todayInvoicesReceived, yesterdayInvoicesReceived);
+
+    // Invoices by status
+    const invoicesByStatus = {
+      pending: await ManufacturerInvoiceModel.countDocuments({
+        toDistributor: distributorId,
+        status: "pending",
+      }),
+      issued: await ManufacturerInvoiceModel.countDocuments({
+        toDistributor: distributorId,
+        status: "issued",
+      }),
+      sent: await ManufacturerInvoiceModel.countDocuments({
+        toDistributor: distributorId,
+        status: "sent",
+      }),
+      paid: await ManufacturerInvoiceModel.countDocuments({
+        toDistributor: distributorId,
+        status: "paid",
+      }),
+    };
+
+    // === DISTRIBUTIONS ===
+    const totalDistributions = await ProofOfDistributionModel.countDocuments({
+      toDistributor: distributorId,
+    });
+
+    const todayDistributions = await ProofOfDistributionModel.countDocuments({
+      toDistributor: distributorId,
+      createdAt: { $gte: startOfToday },
+    });
+
+    const yesterdayDistributions = await ProofOfDistributionModel.countDocuments({
+      toDistributor: distributorId,
+      createdAt: { $gte: startOfYesterday, $lt: startOfToday },
+    });
+
+    const weekDistributions = await ProofOfDistributionModel.countDocuments({
+      toDistributor: distributorId,
+      createdAt: { $gte: sevenDaysAgo },
+    });
+
+    const { diff: distributionsDiff, percentChange: distributionsPercentChange } = 
+      StatisticsCalculationService.calculateTodayYesterdayStats(todayDistributions, yesterdayDistributions);
+
+    // Distributions by status
+    const distributionsByStatus = {
+      pending: await ProofOfDistributionModel.countDocuments({
+        toDistributor: distributorId,
+        status: "pending",
+      }),
+      in_transit: await ProofOfDistributionModel.countDocuments({
+        toDistributor: distributorId,
+        status: "in_transit",
+      }),
+      delivered: await ProofOfDistributionModel.countDocuments({
+        toDistributor: distributorId,
+        status: "delivered",
+      }),
+      confirmed: await ProofOfDistributionModel.countDocuments({
+        toDistributor: distributorId,
+        status: "confirmed",
+      }),
+    };
+
+    // === TRANSFERS TO PHARMACY ===
+    const totalTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
+      fromDistributor: distributorId,
+    });
+
+    const todayTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
+      fromDistributor: distributorId,
+      createdAt: { $gte: startOfToday },
+    });
+
+    const yesterdayTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
+      fromDistributor: distributorId,
+      createdAt: { $gte: startOfYesterday, $lt: startOfToday },
+    });
+
+    const weekTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
+      fromDistributor: distributorId,
+      createdAt: { $gte: sevenDaysAgo },
+    });
+
+    const { diff: transfersDiff, percentChange: transfersPercentChange } = 
+      StatisticsCalculationService.calculateTodayYesterdayStats(todayTransfersToPharmacy, yesterdayTransfersToPharmacy);
+
+    // Transfers by status
+    const transfersByStatus = {
+      draft: await CommercialInvoiceModel.countDocuments({
+        fromDistributor: distributorId,
+        status: "draft",
+      }),
+      sent: await CommercialInvoiceModel.countDocuments({
+        fromDistributor: distributorId,
+        status: "sent",
+      }),
+      paid: await CommercialInvoiceModel.countDocuments({
+        fromDistributor: distributorId,
+        status: "paid",
+      }),
+    };
+
+    // === NFTs ===
+    const totalNFTs = await NFTInfoModel.countDocuments({
+      owner: distributorId,
+    });
+
+    const nftsByStatus = {
+      minted: await NFTInfoModel.countDocuments({
+        owner: distributorId,
+        status: "minted",
+      }),
+      transferred: await NFTInfoModel.countDocuments({
+        owner: distributorId,
+        status: "transferred",
+      }),
+      sold: await NFTInfoModel.countDocuments({
+        owner: distributorId,
+        status: "sold",
+      }),
+    };
+
+    // === RECENT ACTIVITIES ===
+    const recentInvoices = await ManufacturerInvoiceModel.find({
+      toDistributor: distributorId,
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("fromManufacturer", "username email fullName")
+      .lean();
+
+    const recentTransfers = await CommercialInvoiceModel.find({
+      fromDistributor: distributorId,
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("toPharmacy", "username email fullName")
+      .lean();
+
+    return {
+      overview: {
+        invoicesReceived: {
+          total: totalInvoicesReceived,
+          today: todayInvoicesReceived,
+          yesterday: yesterdayInvoicesReceived,
+          thisWeek: weekInvoicesReceived,
+          todayVsYesterday: {
+            diff: invoicesDiff,
+            percentChange: invoicesPercentChange,
+          },
+          byStatus: invoicesByStatus,
+        },
+        distributions: {
+          total: totalDistributions,
+          today: todayDistributions,
+          yesterday: yesterdayDistributions,
+          thisWeek: weekDistributions,
+          todayVsYesterday: {
+            diff: distributionsDiff,
+            percentChange: distributionsPercentChange,
+          },
+          byStatus: distributionsByStatus,
+        },
+        transfersToPharmacy: {
+          total: totalTransfersToPharmacy,
+          today: todayTransfersToPharmacy,
+          yesterday: yesterdayTransfersToPharmacy,
+          thisWeek: weekTransfersToPharmacy,
+          todayVsYesterday: {
+            diff: transfersDiff,
+            percentChange: transfersPercentChange,
+          },
+          byStatus: transfersByStatus,
+        },
+        nfts: {
+          total: totalNFTs,
+          byStatus: nftsByStatus,
+        },
+      },
+      recentActivities: {
+        recentInvoices: recentInvoices.map(inv => ({
+          id: inv._id,
+          invoiceNumber: inv.invoiceNumber,
+          manufacturer: inv.fromManufacturer,
+          quantity: inv.quantity,
+          status: inv.status,
+          createdAt: inv.createdAt,
+        })),
+        recentTransfers: recentTransfers.map(trans => ({
+          id: trans._id,
+          invoiceNumber: trans.invoiceNumber,
+          pharmacy: trans.toPharmacy,
+          quantity: trans.quantity,
+          status: trans.status,
+          createdAt: trans.createdAt,
+        })),
+      },
+      timestamp: new Date(),
+    };
+  }
 }
 
