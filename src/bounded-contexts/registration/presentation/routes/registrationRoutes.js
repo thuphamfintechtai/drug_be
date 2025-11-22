@@ -2,6 +2,8 @@ import express from "express";
 import {
   authenticate,
   isAdmin,
+  authenticateOrAllowFirstAdmin,
+  isAdminOrAllowFirstAdmin,
 } from "../../../identity-access/presentation/middleware/authMiddleware.js";
 
 export const createRegistrationRoutes = (registrationController) => {
@@ -154,7 +156,7 @@ export const createRegistrationRoutes = (registrationController) => {
    *       403:
    *         description: Không có quyền truy cập
    */
-  router.get("/requests", authenticate, isAdmin, (req, res) =>
+  router.get("/requests", authenticateOrAllowFirstAdmin, isAdminOrAllowFirstAdmin, (req, res) =>
     registrationController.getRegistrationRequests(req, res)
   );
 
@@ -178,7 +180,7 @@ export const createRegistrationRoutes = (registrationController) => {
    *       404:
    *         description: Không tìm thấy yêu cầu
    */
-  router.get("/requests/:requestId", authenticate, isAdmin, (req, res) =>
+  router.get("/requests/:requestId", authenticateOrAllowFirstAdmin, isAdminOrAllowFirstAdmin, (req, res) =>
     registrationController.getRegistrationRequestById(req, res)
   );
 
@@ -204,8 +206,8 @@ export const createRegistrationRoutes = (registrationController) => {
    */
   router.post(
     "/requests/:requestId/approve",
-    authenticate,
-    isAdmin,
+    authenticateOrAllowFirstAdmin,
+    isAdminOrAllowFirstAdmin,
     (req, res) => registrationController.approveRegistration(req, res)
   );
 
@@ -238,8 +240,8 @@ export const createRegistrationRoutes = (registrationController) => {
    */
   router.post(
     "/requests/:requestId/reject",
-    authenticate,
-    isAdmin,
+    authenticateOrAllowFirstAdmin,
+    isAdminOrAllowFirstAdmin,
     (req, res) => registrationController.rejectRegistration(req, res)
   );
 

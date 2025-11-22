@@ -113,3 +113,85 @@ export const authorize = createAuthorize;
  */
 export const isAdmin = authorize("system_admin");
 
+/**
+ * Optional authenticate middleware - allows access if no admin exists (first admin setup)
+ * If token is provided, validates it. If no token, allows access only if no admin exists.
+ */
+export const authenticateOrAllowFirstAdmin = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  // If token is provided, authenticate normally
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    return authenticate(req, res, next);
+  }
+
+  // If no token, check if any admin exists
+  try {
+    let repo = userRepository;
+    if (!repo) {
+      // Fallback: create instance if not initialized
+      const { UserRepository } = await import("../../infrastructure/persistence/mongoose/UserRepository.js");
+      repo = new UserRepository();
+    }
+    
+    const adminCount = await repo.countByRole("system_admin");
+    
+    if (adminCount === 0) {
+      // No admin exists, allow access for first admin setup
+      return next();
+    }
+
+    // Admin exists, require authentication
+    return res.status(401).json({
+      success: false,
+      message: "Không có token xác thực",
+    });
+  } catch (error) {
+    console.error("Lỗi khi kiểm tra admin:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi kiểm tra quyền truy cập",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Optional admin authorization - allows access if no admin exists or if user is admin
+ */
+export const isAdminOrAllowFirstAdmin = async (req, res, next) => {
+  // If user is already authenticated and is admin, allow
+  if (req.user && req.user.role === "system_admin") {
+    return next();
+  }
+
+  // If no user, check if any admin exists
+  try {
+    let repo = userRepository;
+    if (!repo) {
+      const { UserRepository } = await import("../../infrastructure/persistence/mongoose/UserRepository.js");
+      repo = new UserRepository();
+    }
+    
+    const adminCount = await repo.countByRole("system_admin");
+    
+    if (adminCount === 0) {
+      // No admin exists, allow access for first admin setup
+      return next();
+    }
+
+    // Admin exists, require admin role
+    return res.status(403).json({
+      success: false,
+      message: "Bạn không có quyền truy cập tài nguyên này",
+    });
+  } catch (error) {
+    console.error("Lỗi khi kiểm tra quyền admin:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi kiểm tra quyền truy cập",
+      error: error.message,
+    });
+  }
+};
+
