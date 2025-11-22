@@ -27,7 +27,7 @@ export class GetAllDrugsUseCase {
     // Use repository's find method if available, otherwise use model directly
     // For now, using model directly for pagination
     const { DrugInfoModel } = await import(
-      "../../supply-chain/infrastructure/persistence/mongoose/schemas/DrugInfoSchema.js"
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/DrugInfoSchema.js"
     );
 
     const drugs = await DrugInfoModel.find(filter)
@@ -49,4 +49,3 @@ export class GetAllDrugsUseCase {
     };
   }
 }
-
