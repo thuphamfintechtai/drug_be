@@ -38,8 +38,11 @@ export class SubmitRegistrationDTO {
       walletAddress,
       taxCode,
       licenseNo,
+      licenseNumber, 
       name,
       fullName,
+      companyName,
+      company,
       country,
       address,
       contactEmail,
@@ -47,20 +50,32 @@ export class SubmitRegistrationDTO {
       gmpCertNo,
     } = req.body;
 
+    // Lấy licenseNo từ licenseNo hoặc licenseNumber
+    const finalLicenseNo = licenseNo || licenseNumber;
+    
+    // Lấy taxCode từ taxCode hoặc company.taxCode
+    const finalTaxCode = taxCode || company?.taxCode;
+    
+    // Lấy name từ name, companyName, hoặc company.name
+    const finalName = name || companyName || company?.name;
+    
+    // Lấy contactPhone từ contactPhone hoặc phone
+    const finalContactPhone = contactPhone || req.body.phone;
+
     return new SubmitRegistrationDTO(
       username,
       email,
       password,
       role,
       walletAddress,
-      licenseNo,
-      taxCode,
-      name,
+      finalLicenseNo,
+      finalTaxCode,
+      finalName,
       fullName,
       country,
       address,
       contactEmail,
-      contactPhone,
+      finalContactPhone,
       gmpCertNo
     );
   }

@@ -51,8 +51,6 @@ export class UserMapper {
       updatedAt: aggregate.updatedAt || new Date(),
     };
 
-    // Only include _id if it's a valid ObjectId (for existing documents)
-    // If it's a UUID or invalid format, let MongoDB generate a new ObjectId
     if (aggregate.id && aggregate.id !== "undefined" && mongoose.Types.ObjectId.isValid(aggregate.id)) {
       document._id = aggregate.id;
     }
