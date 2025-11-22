@@ -1,4 +1,5 @@
 import { User } from "../../../../domain/aggregates/User.js";
+import mongoose from "mongoose";
 
 export class UserMapper {
   static toDomain(document) {
@@ -32,7 +33,6 @@ export class UserMapper {
     }
 
     const document = {
-      _id: aggregate.id,
       username: aggregate.username,
       email: aggregate.email,
       password: aggregate.passwordHash,
@@ -51,9 +51,10 @@ export class UserMapper {
       updatedAt: aggregate.updatedAt || new Date(),
     };
 
-    // Only include _id if it's a new document (MongoDB will generate)
-    if (!aggregate.id || aggregate.id === "undefined") {
-      delete document._id;
+    // Only include _id if it's a valid ObjectId (for existing documents)
+    // If it's a UUID or invalid format, let MongoDB generate a new ObjectId
+    if (aggregate.id && aggregate.id !== "undefined" && mongoose.Types.ObjectId.isValid(aggregate.id)) {
+      document._id = aggregate.id;
     }
 
     return document;
