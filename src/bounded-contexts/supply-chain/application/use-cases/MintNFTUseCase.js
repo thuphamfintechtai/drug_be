@@ -22,35 +22,26 @@ export class MintNFTUseCase {
   async execute(dto, manufacturerId) {
     dto.validate();
 
-    // Check drug exists and belongs to manufacturer
-    // Try to find by ID, ATC code, or name with ownership check
     let drug = await this._drugInfoRepository.findByIdOrCodeOrName(dto.drugId, manufacturerId);
     
     if (!drug) {
-      // Try to find without manufacturerId to see if drug exists
       const drugWithoutFilter = await this._drugInfoRepository.findByIdOrCodeOrName(dto.drugId, null);
       if (drugWithoutFilter) {
         throw new Error("Bạn không có quyền mint NFT cho thuốc này");
       }
       throw new DrugNotFoundException(`Thuốc với ID ${dto.drugId} không tồn tại`);
     }
-
-    // Check tokenIds already exist
     const existingNFTs = await this._nftRepository.findByTokenIds(dto.tokenIds);
     if (existingNFTs.length > 0) {
       const existingTokenIds = existingNFTs.map(nft => nft.tokenId);
       throw new Error(`Một số tokenId đã tồn tại: ${existingTokenIds.join(", ")}`);
     }
-
-    // Parse IPFS URL to get hash
     const ipfsHash = IPFSHash.create(
       dto.ipfsUrl.split("/").pop() || dto.ipfsUrl,
       dto.ipfsUrl
     );
 
     const chainTxHash = TransactionHash.create(dto.transactionHash);
-
-    // Create Proof of Production
     const proofOfProduction = ProofOfProduction.create(
       manufacturerId,
       dto.drugId,

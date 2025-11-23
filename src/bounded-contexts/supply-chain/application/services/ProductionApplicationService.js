@@ -197,15 +197,16 @@ export class ProductionApplicationService {
   }
 
   async getProfile(manufacturerId, user) {
-    // Get business entity
-    const { BusinessEntityFactory } = await import(
-      "../../../registration/infrastructure/persistence/BusinessEntityFactory.js"
+    // Get business entity using repository
+    const { BusinessEntityRepository } = await import(
+      "../../../registration/infrastructure/persistence/BusinessEntityRepository.js"
     );
-    const pharmaCompany =
-      await BusinessEntityFactory.getBusinessEntityWithValidation(
-        user,
-        "pharma_company"
-      );
+    const businessEntityRepo = new BusinessEntityRepository();
+    
+    const pharmaCompany = await businessEntityRepo.findByUserId(
+      user.id || user._id?.toString(),
+      "pharma_company"
+    );
 
     // Get user info
     const { UserModel } = await import(
@@ -215,9 +216,23 @@ export class ProductionApplicationService {
       "-password"
     );
 
+    // Format pharma company
+    let formattedPharmaCompany = null;
+    if (pharmaCompany) {
+      formattedPharmaCompany = {
+        id: pharmaCompany.id || pharmaCompany._id?.toString(),
+        name: pharmaCompany.name,
+        licenseNo: pharmaCompany.licenseNo,
+        taxCode: pharmaCompany.taxCode,
+        status: pharmaCompany.status,
+        walletAddress: pharmaCompany.walletAddress,
+        ...(pharmaCompany.gmpCertNo && { gmpCertNo: pharmaCompany.gmpCertNo }),
+      };
+    }
+
     return {
       user: userInfo ? userInfo.toObject() : user,
-      pharmaCompany: pharmaCompany ? pharmaCompany.toObject() : pharmaCompany,
+      pharmaCompany: formattedPharmaCompany,
     };
   }
 

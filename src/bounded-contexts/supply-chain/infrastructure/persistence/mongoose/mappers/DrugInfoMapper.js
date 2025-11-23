@@ -15,9 +15,24 @@ export class DrugInfoMapper {
     );
     const atcCode = ATCCode.create(document.atcCode);
 
+    // Handle manufacturer - could be ObjectId or populated object
+    let manufacturerId = null;
+    if (document.manufacturer) {
+      if (typeof document.manufacturer === 'object' && document.manufacturer._id) {
+        // Populated object
+        manufacturerId = document.manufacturer._id.toString();
+      } else if (typeof document.manufacturer === 'object' && document.manufacturer.toString) {
+        // ObjectId
+        manufacturerId = document.manufacturer.toString();
+      } else if (typeof document.manufacturer === 'string') {
+        // Already a string
+        manufacturerId = document.manufacturer;
+      }
+    }
+
     return new DrugInfo(
       document._id.toString(),
-      document.manufacturer?.toString() || document.manufacturer,
+      manufacturerId,
       drugName,
       atcCode,
       document.dosageForm || null,

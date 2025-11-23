@@ -21,17 +21,16 @@ export class DrugManagementApplicationService {
   }
 
   async getDrugById(drugId, manufacturerId) {
-    const drugInfo = await this._drugInfoRepository.findById(drugId);
+    // Try to find by ID, ATC code, or name with ownership check
+    let drugInfo = await this._drugInfoRepository.findByIdOrCodeOrName(drugId, manufacturerId);
     
     if (!drugInfo) {
+      // Try to find without manufacturerId to see if drug exists
+      const drugWithoutFilter = await this._drugInfoRepository.findByIdOrCodeOrName(drugId, null);
+      if (drugWithoutFilter) {
+        throw new Error("Bạn không có quyền xem thuốc này");
+      }
       throw new (await import("../../domain/exceptions/DrugNotFoundException.js")).DrugNotFoundException(`Thuốc với ID ${drugId} không tồn tại`);
-    }
-
-    // Check ownership - convert both to string for comparison
-    const drugManufacturerId = String(drugInfo.manufacturerId || "");
-    const userManufacturerId = String(manufacturerId || "");
-    if (drugManufacturerId !== userManufacturerId) {
-      throw new Error("Bạn không có quyền xem thuốc này");
     }
 
     return drugInfo;
