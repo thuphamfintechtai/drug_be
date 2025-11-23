@@ -8,17 +8,14 @@ export class UpdateDrugUseCase {
   }
 
   async execute(drugId, dto, manufacturerId) {
-    const drugInfo = await this._drugInfoRepository.findById(drugId);
-
+    let drugInfo = await this._drugInfoRepository.findByIdOrCodeOrName(drugId, manufacturerId);
+    
     if (!drugInfo) {
+      const drugWithoutFilter = await this._drugInfoRepository.findByIdOrCodeOrName(drugId, null);
+      if (drugWithoutFilter) {
+        throw new Error("Bạn không có quyền cập nhật thuốc này");
+      }
       throw new DrugNotFoundException(`Thuốc với ID ${drugId} không tồn tại`);
-    }
-
-    // Check ownership - convert both to string for comparison
-    const drugManufacturerId = String(drugInfo.manufacturerId || "");
-    const userManufacturerId = String(manufacturerId || "");
-    if (drugManufacturerId !== userManufacturerId) {
-      throw new Error("Bạn không có quyền cập nhật thuốc này");
     }
 
     if (!dto.hasUpdates()) {

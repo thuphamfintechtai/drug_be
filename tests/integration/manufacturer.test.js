@@ -7,10 +7,10 @@ import {
   createTestUser,
   getAuthToken,
 } from "../helpers/testHelpers.js";
-import DrugInfo from "../../models/DrugInfo.js";
-import NFTInfo from "../../models/NFTInfo.js";
-import ProofOfProduction from "../../models/ProofOfProduction.js";
-import ManufacturerInvoice from "../../models/ManufacturerInvoice.js";
+import { DrugInfoModel } from "../../src/bounded-contexts/supply-chain/infrastructure/persistence/mongoose/schemas/DrugInfoSchema.js";
+import { NFTInfoModel } from "../../src/bounded-contexts/supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js";
+import { ProofOfProductionModel } from "../../src/bounded-contexts/supply-chain/infrastructure/persistence/mongoose/schemas/ProofOfProductionSchema.js";
+import { ManufacturerInvoiceModel } from "../../src/bounded-contexts/supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js";
 
 describe("Manufacturer Workflow Tests", () => {
   let manufacturer, distributor, authToken;
@@ -89,12 +89,12 @@ describe("Manufacturer Workflow Tests", () => {
     test("Manufacturer có thể xem danh sách thuốc của mình", async () => {
       // Tạo một số thuốc
       const pharmaCompany = await manufacturer.populate("pharmaCompany");
-      await DrugInfo.create({
+      await DrugInfoModel.create({
         manufacturer: pharmaCompany.pharmaCompany,
         tradeName: "Drug 1",
         atcCode: "DRUG001",
       });
-      await DrugInfo.create({
+      await DrugInfoModel.create({
         manufacturer: pharmaCompany.pharmaCompany,
         tradeName: "Drug 2",
         atcCode: "DRUG002",
@@ -111,7 +111,7 @@ describe("Manufacturer Workflow Tests", () => {
 
     test("Manufacturer có thể cập nhật thông tin thuốc", async () => {
       const pharmaCompany = await manufacturer.populate("pharmaCompany");
-      const drug = await DrugInfo.create({
+      const drug = await DrugInfoModel.create({
         manufacturer: pharmaCompany.pharmaCompany,
         tradeName: "Old Name",
         atcCode: "UPDATE001",
@@ -133,7 +133,7 @@ describe("Manufacturer Workflow Tests", () => {
 
     test("Manufacturer có thể xem thông tin chi tiết một thuốc", async () => {
       const pharmaCompany = await manufacturer.populate("pharmaCompany");
-      const drug = await DrugInfo.create({
+      const drug = await DrugInfoModel.create({
         manufacturer: pharmaCompany.pharmaCompany,
         tradeName: "Detail Drug",
         atcCode: "DETAIL001",
@@ -208,12 +208,12 @@ describe("Manufacturer Workflow Tests", () => {
       expect(response.body.data.tokenIds).toEqual(tokenIds);
 
       // Kiểm tra ProofOfProduction đã được tạo
-      const proof = await ProofOfProduction.findById(response.body.data.proofOfProduction._id);
+      const proof = await ProofOfProductionModel.findById(response.body.data.proofOfProduction._id);
       expect(proof).toBeTruthy();
       expect(proof.quantity).toBe(3);
 
       // Kiểm tra NFT đã được lưu
-      const nfts = await NFTInfo.find({ tokenId: { $in: tokenIds } });
+      const nfts = await NFTInfoModel.find({ tokenId: { $in: tokenIds } });
       expect(nfts.length).toBe(3);
       expect(nfts[0].status).toBe("minted");
       expect(nfts[0].owner.toString()).toBe(manufacturer._id.toString());
@@ -267,7 +267,7 @@ describe("Manufacturer Workflow Tests", () => {
       });
 
       // Tạo Proof of Production
-      const proof = await ProofOfProduction.create({
+      const proof = await ProofOfProductionModel.create({
         manufacturer: pharmaCompany.pharmaCompany,
         drug: drug._id,
         quantity: 5,
@@ -277,7 +277,7 @@ describe("Manufacturer Workflow Tests", () => {
       // Tạo một số NFT đã mint
       nftInfos = [];
       for (let i = 1; i <= 5; i++) {
-        const nft = await NFTInfo.create({
+        const nft = await NFTInfoModel.create({
           tokenId: `100${i}`,
           contractAddress: "0x73f4600D02274e31a094DdF71e5bCD992Fd367E7",
           drug: drug._id,
@@ -358,7 +358,7 @@ describe("Manufacturer Workflow Tests", () => {
 
       // Kiểm tra NFT đã được cập nhật status
       const distributorWithUser = await distributor.populate("user");
-      const updatedNFTs = await NFTInfo.find({ tokenId: { $in: tokenIds } });
+      const updatedNFTs = await NFTInfoModel.find({ tokenId: { $in: tokenIds } });
       expect(updatedNFTs.every((nft) => nft.status === "transferred")).toBe(true);
       expect(updatedNFTs.every((nft) => nft.owner.toString() === distributorWithUser.user._id.toString())).toBe(true);
     });

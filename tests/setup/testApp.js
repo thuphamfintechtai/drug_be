@@ -1,31 +1,32 @@
-import express from "express";
-import mongoose from "mongoose";
-import dotenv from "dotenv";
-import authRoutes from "../../routes/authRoutes.js";
-import userRoutes from "../../routes/userRoutes.js";
-import pharmaCompanyRoutes from "../../routes/pharmaCompanyRoutes.js";
-import distributorRoutes from "../../routes/distributorRoutes.js";
+import { ApplicationBootstrap } from "../../src/composition-root/bootstrap.js";
+import { createApp } from "../../src/presentation/app.js";
 
-dotenv.config();
-dotenv.config({ path: ".env.test" });
+let app = null;
+let bootstrap = null;
 
-const app = express();
+async function initializeTestApp() {
+  if (app) return app;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+  try {
+    // Bootstrap application
+    bootstrap = new ApplicationBootstrap();
+    await bootstrap.initialize();
+    await bootstrap.initializeMiddleware();
 
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/pharma-company", pharmaCompanyRoutes);
-app.use("/api/distributor", distributorRoutes);
+    // Get routes
+    const routes = bootstrap.getRoutes();
 
-app.use((err, req, res, next) => {
-  console.error("Lỗi:", err);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || "Lỗi server",
-  });
-});
+    // Create Express app
+    app = createApp(routes);
 
-export default app;
+    return app;
+  } catch (error) {
+    console.error("Lỗi khi khởi động test app:", error);
+    throw error;
+  }
+}
 
+// Initialize app
+const testAppPromise = initializeTestApp();
+
+export default testAppPromise;
