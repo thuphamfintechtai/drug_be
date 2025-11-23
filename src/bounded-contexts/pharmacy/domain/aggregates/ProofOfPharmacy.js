@@ -87,7 +87,7 @@ export class ProofOfPharmacy extends AggregateRoot {
     );
 
     // Emit domain event
-    proof.addDomainEvent(
+    proof.raiseDomainEvent(
       new DrugDelivered(
         proof.id,
         proof.fromDistributorId,

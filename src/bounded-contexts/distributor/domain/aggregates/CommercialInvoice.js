@@ -96,7 +96,7 @@ export class CommercialInvoice extends AggregateRoot {
     );
 
     // Emit domain event
-    invoice.addDomainEvent(
+    invoice.raiseDomainEvent(
       new DistributorToPharmacyTransfer(
         invoice.id,
         invoice.fromDistributorId,

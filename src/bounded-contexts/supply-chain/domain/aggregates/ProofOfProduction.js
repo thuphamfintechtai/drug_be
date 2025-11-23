@@ -56,7 +56,7 @@ export class ProofOfProduction extends AggregateRoot {
     );
 
     // Emit domain event
-    proof.addDomainEvent(
+    proof.raiseDomainEvent(
       new DrugManufactured(
         proof.id,
         proof.manufacturerId,

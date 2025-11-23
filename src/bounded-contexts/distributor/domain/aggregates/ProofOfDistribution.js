@@ -74,7 +74,7 @@ export class ProofOfDistribution extends AggregateRoot {
     );
 
     // Emit domain event
-    proof.addDomainEvent(
+    proof.raiseDomainEvent(
       new DrugTransferred(
         proof.id,
         proof.fromManufacturerId,

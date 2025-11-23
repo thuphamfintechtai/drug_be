@@ -52,13 +52,16 @@ export class MintNFTUseCase {
     );
 
     proofOfProduction.completeProduction(dto.transactionHash);
-    await this._proofOfProductionRepository.save(proofOfProduction);
+    // Store domain events before saving (they will be lost after save because new instance is created from MongoDB document)
+    const proofOfProductionEvents = [...proofOfProduction.domainEvents];
+    // Save and get the saved instance with MongoDB ObjectId
+    const savedProofOfProduction = await this._proofOfProductionRepository.save(proofOfProduction);
 
     // Create NFTs
     const nfts = [];
     for (let i = 0; i < dto.tokenIds.length; i++) {
       const tokenId = dto.tokenIds[i];
-      const serialNumber = `${proofOfProduction.batchNumber}-${tokenId}`;
+      const serialNumber = `${savedProofOfProduction.batchNumber}-${tokenId}`;
       
       // Extract metadata for this specific NFT if available
       const nftMetadata = dto.metadata && dto.metadata[i] ? dto.metadata[i] : dto.metadata;
@@ -67,14 +70,14 @@ export class MintNFTUseCase {
         tokenId,
         dto.drugId,
         manufacturerId,
-        proofOfProduction.batchNumber,
+        savedProofOfProduction.batchNumber,
         serialNumber,
         1, // quantity per NFT
         dto.mfgDate,
         dto.expDate,
         ipfsHash,
         nftMetadata,
-        proofOfProduction.id
+        savedProofOfProduction.id
       );
 
       nft.setMintTransaction(dto.transactionHash);
@@ -111,8 +114,8 @@ export class MintNFTUseCase {
       }
     }
 
-    // Publish domain events
-    proofOfProduction.domainEvents.forEach(event => {
+    // Publish domain events (use events from original instance as saved instance doesn't have them)
+    proofOfProductionEvents.forEach(event => {
       this._eventBus.publish(event);
     });
 
@@ -123,9 +126,9 @@ export class MintNFTUseCase {
     });
 
     return {
-      proofOfProductionId: proofOfProduction.id,
-      batchNumber: proofOfProduction.batchNumber,
-      quantity: proofOfProduction.quantity,
+      proofOfProductionId: savedProofOfProduction.id,
+      batchNumber: savedProofOfProduction.batchNumber,
+      quantity: savedProofOfProduction.quantity,
       nftIds: nfts.map(nft => nft.id),
       tokenIds: nfts.map(nft => nft.tokenId),
       transactionHash: dto.transactionHash,

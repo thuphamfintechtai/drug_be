@@ -97,7 +97,7 @@ export class ManufacturerInvoice extends AggregateRoot {
     );
 
     // Emit domain event
-    invoice.addDomainEvent(
+    invoice.raiseDomainEvent(
       new ManufacturerToDistributorTransfer(
         invoice.id,
         invoice.fromManufacturerId,

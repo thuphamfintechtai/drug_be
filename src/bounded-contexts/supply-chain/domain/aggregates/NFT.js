@@ -92,7 +92,7 @@ export class NFT extends AggregateRoot {
     );
 
     // Emit domain event
-    nft.addDomainEvent(
+    nft.raiseDomainEvent(
       new NFTMinted(
         nft.id,
         nft.tokenId.value,
