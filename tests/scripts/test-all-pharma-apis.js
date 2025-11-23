@@ -17,19 +17,19 @@ function log(message, color = 'reset') {
 }
 
 function logSuccess(message) {
-  log(`✅ ${message}`, 'green');
+  log(`${message}`, 'green');
 }
 
 function logError(message) {
-  log(`❌ ${message}`, 'red');
+  log(`${message}`, 'red');
 }
 
 function logInfo(message) {
-  log(`ℹ️  ${message}`, 'cyan');
+  log(`${message}`, 'cyan');
 }
 
 function logWarning(message) {
-  log(`⚠️  ${message}`, 'yellow');
+  log(`${message}`, 'yellow');
 }
 
 async function testAPI(name, method, url, options = {}) {

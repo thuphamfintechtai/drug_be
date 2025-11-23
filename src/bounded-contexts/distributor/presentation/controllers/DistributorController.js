@@ -373,10 +373,12 @@ export class DistributorController {
         data: trackingInfo,
       });
     } catch (error) {
-      if (error.message && error.message.includes("không tìm thấy")) {
+      const errorMessage = error.message || error.toString();
+      
+      if (errorMessage.includes("không tìm thấy") || errorMessage.includes("Không tìm thấy") || errorMessage.includes("not found")) {
         return res.status(404).json({
           success: false,
-          message: error.message,
+          message: errorMessage,
         });
       }
 
@@ -384,7 +386,7 @@ export class DistributorController {
       return res.status(500).json({
         success: false,
         message: "Lỗi server khi track drug",
-        error: error.message,
+        error: errorMessage,
       });
     }
   }
@@ -941,12 +943,26 @@ export class DistributorController {
 
   async getContractInfoFromBlockchain(req, res) {
     try {
-      const { distributorAddress, pharmacyAddress } = req.query;
+      let { distributorAddress, pharmacyAddress } = req.query;
+      const user = req.user;
 
-      if (!distributorAddress || !pharmacyAddress) {
+      // Lấy distributor address từ user profile nếu không có trong query
+      if (!distributorAddress && user?.walletAddress) {
+        distributorAddress = user.walletAddress;
+      }
+
+      // Nếu vẫn thiếu address, trả về lỗi với thông báo rõ ràng hơn
+      if (!distributorAddress) {
         return res.status(400).json({
           success: false,
-          message: "Distributor address và Pharmacy address là bắt buộc",
+          message: "Distributor address là bắt buộc. Vui lòng cung cấp distributorAddress trong query params hoặc đảm bảo user có walletAddress.",
+        });
+      }
+
+      if (!pharmacyAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "Pharmacy address là bắt buộc. Vui lòng cung cấp pharmacyAddress trong query params.",
         });
       }
 

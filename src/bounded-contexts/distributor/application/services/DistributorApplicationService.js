@@ -336,17 +336,41 @@ export class DistributorApplicationService {
   }
 
   async getProfile(distributorId, user) {
-    // Get business entity
-    const BusinessEntityFactory = (await import("../../../../services/factories/BusinessEntityFactory.js")).BusinessEntityFactory;
-    const distributor = await BusinessEntityFactory.getBusinessEntityWithValidation(user, "distributor");
+    // Get business entity using repository
+    const { BusinessEntityRepository } = await import(
+      "../../../registration/infrastructure/persistence/BusinessEntityRepository.js"
+    );
+    const businessEntityRepo = new BusinessEntityRepository();
     
+    const distributor = await businessEntityRepo.findByUserId(
+      user.id || user._id?.toString(),
+      "distributor"
+    );
+
     // Get user info
-    const { UserModel } = await import("../../../identity-access/infrastructure/persistence/mongoose/schemas/UserSchema.js");
-    const userInfo = await UserModel.findById(user._id || user.id).select("-password");
+    const { UserModel } = await import(
+      "../../../identity-access/infrastructure/persistence/mongoose/schemas/UserSchema.js"
+    );
+    const userInfo = await UserModel.findById(user._id || user.id).select(
+      "-password"
+    );
+
+    // Format distributor
+    let formattedDistributor = null;
+    if (distributor) {
+      formattedDistributor = {
+        id: distributor.id || distributor._id?.toString(),
+        name: distributor.name,
+        licenseNo: distributor.licenseNo,
+        taxCode: distributor.taxCode,
+        status: distributor.status,
+        walletAddress: distributor.walletAddress,
+      };
+    }
 
     return {
       user: userInfo ? userInfo.toObject() : user,
-      distributor: distributor ? distributor.toObject() : distributor,
+      distributor: formattedDistributor,
     };
   }
 

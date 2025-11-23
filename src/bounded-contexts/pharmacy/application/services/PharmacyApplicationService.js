@@ -259,15 +259,16 @@ export class PharmacyApplicationService {
   }
 
   async getProfile(pharmacyId, user) {
-    // Get business entity
-    const { BusinessEntityFactory } = await import(
-      "../../../registration/infrastructure/persistence/BusinessEntityFactory.js"
+    // Get business entity using repository
+    const { BusinessEntityRepository } = await import(
+      "../../../registration/infrastructure/persistence/BusinessEntityRepository.js"
     );
-    const pharmacy =
-      await BusinessEntityFactory.getBusinessEntityWithValidation(
-        user,
-        "pharmacy"
-      );
+    const businessEntityRepo = new BusinessEntityRepository();
+    
+    const pharmacy = await businessEntityRepo.findByUserId(
+      user.id || user._id?.toString(),
+      "pharmacy"
+    );
 
     // Get user info
     const { UserModel } = await import(
@@ -277,9 +278,22 @@ export class PharmacyApplicationService {
       "-password"
     );
 
+    // Format pharmacy
+    let formattedPharmacy = null;
+    if (pharmacy) {
+      formattedPharmacy = {
+        id: pharmacy.id || pharmacy._id?.toString(),
+        name: pharmacy.name,
+        licenseNo: pharmacy.licenseNo,
+        taxCode: pharmacy.taxCode,
+        status: pharmacy.status,
+        walletAddress: pharmacy.walletAddress,
+      };
+    }
+
     return {
       user: userInfo ? userInfo.toObject() : user,
-      pharmacy: pharmacy ? pharmacy.toObject() : pharmacy,
+      pharmacy: formattedPharmacy,
     };
   }
 
@@ -441,7 +455,26 @@ export class PharmacyApplicationService {
       "../../../../shared-kernel/utils/StatisticsCalculationService.js"
     );
 
-    const { start, end } = DateHelper.parseDateRange(startDate, endDate);
+    let start, end;
+    try {
+      const parsed = DateHelper.parseDateRange(startDate, endDate);
+      start = parsed.start;
+      end = parsed.end;
+    } catch (error) {
+      // Fallback nếu parseDateRange lỗi
+      start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new Error("startDate và endDate phải là định dạng ngày hợp lệ");
+      }
+      
+      if (start > end) {
+        throw new Error("startDate phải nhỏ hơn hoặc bằng endDate");
+      }
+    }
 
     // Query receipts trong khoảng thời gian
     const receipts = await this._proofOfPharmacyRepository.findByPharmacy(
