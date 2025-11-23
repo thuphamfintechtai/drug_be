@@ -14,8 +14,10 @@ export class UpdateDrugUseCase {
       throw new DrugNotFoundException(`Thuốc với ID ${drugId} không tồn tại`);
     }
 
-    // Check ownership
-    if (drugInfo.manufacturerId !== manufacturerId) {
+    // Check ownership - convert both to string for comparison
+    const drugManufacturerId = String(drugInfo.manufacturerId || "");
+    const userManufacturerId = String(manufacturerId || "");
+    if (drugManufacturerId !== userManufacturerId) {
       throw new Error("Bạn không có quyền cập nhật thuốc này");
     }
 
