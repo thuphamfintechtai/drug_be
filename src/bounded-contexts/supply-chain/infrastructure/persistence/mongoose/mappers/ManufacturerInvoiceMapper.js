@@ -4,6 +4,7 @@ import { Quantity } from "../../../../domain/value-objects/Quantity.js";
 import { Price } from "../../../../domain/value-objects/Price.js";
 import { TransactionHash } from "../../../../domain/value-objects/TransactionHash.js";
 import { InvoiceStatus } from "../../../../domain/aggregates/ManufacturerInvoice.js";
+import mongoose from "mongoose";
 
 export class ManufacturerInvoiceMapper {
   static toDomain(document) {
@@ -12,27 +13,60 @@ export class ManufacturerInvoiceMapper {
     }
 
     // Handle populated objects - extract _id if it's an object
-    const getObjectId = (field) => {
-      if (!field) return null;
-      if (typeof field === 'object' && field._id) {
+    // Access raw document via _doc to get original ObjectIds even if populate failed
+    const getObjectId = (fieldName) => {
+      const field = document[fieldName];
+      
+      // If field is populated object with _id, return it
+      if (field && typeof field === 'object' && field._id) {
         return field._id.toString();
       }
-      if (typeof field === 'object' && field.toString) {
+      
+      // If populate returned null, try to get raw ObjectId from _doc
+      if (!field && document._doc && document._doc[fieldName]) {
+        const rawValue = document._doc[fieldName];
+        if (rawValue) {
+          if (typeof rawValue === 'object' && rawValue.constructor && rawValue.constructor.name === 'ObjectId') {
+            return rawValue.toString();
+          }
+          if (typeof rawValue === 'object' && rawValue.toString) {
+            return rawValue.toString();
+          }
+          if (typeof rawValue === 'string') {
+            return rawValue;
+          }
+        }
+      }
+      
+      // If it's a Mongoose ObjectId (not populated)
+      if (field && typeof field === 'object' && field.constructor && field.constructor.name === 'ObjectId') {
         return field.toString();
       }
-      if (typeof field === 'string') {
+      
+      // If it's an object with toString method
+      if (field && typeof field === 'object' && field.toString) {
+        const str = field.toString();
+        // Check if it's a valid ObjectId string
+        if (str && str.length === 24 && /^[0-9a-fA-F]{24}$/.test(str)) {
+          return str;
+        }
+      }
+      
+      // If it's already a string
+      if (field && typeof field === 'string') {
         return field;
       }
-      return field;
+      
+      return null;
     };
 
     return new ManufacturerInvoice(
       document._id.toString(),
-      getObjectId(document.fromManufacturer),
-      getObjectId(document.toDistributor),
-      getObjectId(document.drug),
-      getObjectId(document.proofOfProduction),
-      getObjectId(document.nftInfo),
+      getObjectId('fromManufacturer'),
+      getObjectId('toDistributor'),
+      getObjectId('drug'),
+      getObjectId('proofOfProduction'),
+      getObjectId('nftInfo'),
       document.invoiceNumber,
       document.invoiceDate || null,
       document.quantity || 0,
@@ -53,10 +87,28 @@ export class ManufacturerInvoiceMapper {
       return null;
     }
 
+    // Ensure fromManufacturerId is converted to ObjectId if it's a valid string
+    let fromManufacturerId = aggregate.fromManufacturerId;
+    if (fromManufacturerId && typeof fromManufacturerId === 'string' && mongoose.Types.ObjectId.isValid(fromManufacturerId)) {
+      fromManufacturerId = new mongoose.Types.ObjectId(fromManufacturerId);
+    }
+
+    // Ensure toDistributorId is converted to ObjectId if it's a valid string
+    let toDistributorId = aggregate.toDistributorId;
+    if (toDistributorId && typeof toDistributorId === 'string' && mongoose.Types.ObjectId.isValid(toDistributorId)) {
+      toDistributorId = new mongoose.Types.ObjectId(toDistributorId);
+    }
+
+    // Ensure drugId is converted to ObjectId if it's a valid string
+    let drugId = aggregate.drugId;
+    if (drugId && typeof drugId === 'string' && mongoose.Types.ObjectId.isValid(drugId)) {
+      drugId = new mongoose.Types.ObjectId(drugId);
+    }
+
     const document = {
-      fromManufacturer: aggregate.fromManufacturerId,
-      toDistributor: aggregate.toDistributorId,
-      drug: aggregate.drugId,
+      fromManufacturer: fromManufacturerId,
+      toDistributor: toDistributorId,
+      drug: drugId,
       proofOfProduction: aggregate.proofOfProductionId || null,
       nftInfo: aggregate.nftInfoId || null,
       invoiceNumber: aggregate.invoiceNumber,

@@ -31,7 +31,9 @@ export class TransferToDistributorUseCase {
     vatRate = null,
     vatAmount = null,
     finalAmount = null,
-    notes = null
+    notes = null,
+    batchNumber = null,
+    chainTxHash = null
   ) {
     // Convert distributorId to User ID if it's a Distributor entity ID
     let finalDistributorId = distributorId;
@@ -91,7 +93,7 @@ export class TransferToDistributorUseCase {
     // Update ProofOfProduction status to "distributed" if exists
     if (proofOfProductionId && this._proofOfProductionRepository) {
       const proofOfProduction = await this._proofOfProductionRepository.findById(proofOfProductionId);
-      if (proofOfProduction) {
+      if (proofOfProduction && proofOfProduction.status === "completed") {
         proofOfProduction.markAsDistributed();
         await this._proofOfProductionRepository.save(proofOfProduction);
       }
@@ -121,7 +123,34 @@ export class TransferToDistributorUseCase {
 
     invoice.issue(); // Automatically issue the invoice
 
+    // Set chainTxHash if provided
+    if (chainTxHash) {
+      invoice.setChainTxHash(chainTxHash);
+    }
+
     await this._manufacturerInvoiceRepository.save(invoice);
+
+    // Save batchNumber if provided (batchNumber is not in domain aggregate, save directly to document)
+    if (batchNumber) {
+      const { ManufacturerInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
+      const mongoose = await import("mongoose");
+      
+      // Try to update by ID if it's a valid ObjectId, otherwise use invoiceNumber
+      if (mongoose.default.Types.ObjectId.isValid(invoice.id)) {
+        await ManufacturerInvoiceModel.findByIdAndUpdate(
+          invoice.id,
+          { $set: { batchNumber } },
+          { new: true }
+        );
+      } else {
+        // If ID is not ObjectId (e.g., UUID), find by invoiceNumber
+        await ManufacturerInvoiceModel.findOneAndUpdate(
+          { invoiceNumber: invoice.invoiceNumber },
+          { $set: { batchNumber } },
+          { new: true }
+        );
+      }
+    }
 
     // Publish domain events
     invoice.domainEvents.forEach(event => {

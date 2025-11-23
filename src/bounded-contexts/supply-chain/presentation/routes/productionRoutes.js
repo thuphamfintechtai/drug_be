@@ -92,16 +92,54 @@ export const createProductionRoutes = (productionController) => {
    *             type: object
    *             required:
    *               - distributorId
+   *               - drugId
    *               - tokenIds
    *             properties:
    *               distributorId:
    *                 type: string
+   *                 description: ID của distributor (User ID hoặc Distributor entity ID)
+   *               drugId:
+   *                 type: string
+   *                 description: ID của thuốc
    *               tokenIds:
    *                 type: array
    *                 items:
    *                   type: string
+   *                 description: Danh sách token ID của NFT cần chuyển giao
    *               invoiceNumber:
    *                 type: string
+   *                 description: Số hóa đơn (nếu không có sẽ tự động generate)
+   *               invoiceDate:
+   *                 type: string
+   *                 format: date-time
+   *                 description: Ngày tạo hóa đơn
+   *               quantity:
+   *                 type: number
+   *                 description: Số lượng (nếu không có sẽ tính từ số lượng tokenIds)
+   *               unitPrice:
+   *                 type: number
+   *                 description: Đơn giá
+   *               totalAmount:
+   *                 type: number
+   *                 description: Tổng tiền trước VAT
+   *               vatRate:
+   *                 type: number
+   *                 description: Thuế VAT (%)
+   *               vatAmount:
+   *                 type: number
+   *                 description: Số tiền VAT
+   *               finalAmount:
+   *                 type: number
+   *                 description: Tổng tiền sau VAT
+   *               notes:
+   *                 type: string
+   *                 description: Ghi chú
+   *               batchNumber:
+   *                 type: string
+   *                 description: Số lô sản xuất (optional)
+   *               chainTxHash:
+   *                 type: string
+   *                 description: Transaction hash trên blockchain (optional, có thể set sau qua API save-transfer)
    *     responses:
    *       200:
    *         description: Tạo invoice thành công

@@ -74,6 +74,12 @@ export class ManufacturerInvoiceRepository extends IManufacturerInvoiceRepositor
       ];
     }
 
+    // Get raw documents first to preserve ObjectIds even if populate fails
+    const rawDocuments = await ManufacturerInvoiceModel.find(query)
+      .lean()
+      .sort({ createdAt: -1 });
+
+    // Then get populated documents
     const documents = await ManufacturerInvoiceModel.find(query)
       .populate("fromManufacturer")
       .populate("toDistributor")
@@ -82,7 +88,21 @@ export class ManufacturerInvoiceRepository extends IManufacturerInvoiceRepositor
       .populate("nftInfo")
       .sort({ createdAt: -1 });
 
-    return documents.map(doc => ManufacturerInvoiceMapper.toDomain(doc));
+    // Merge: use populated data if available, otherwise use raw ObjectId
+    return documents.map((doc, index) => {
+      const rawDoc = rawDocuments[index];
+      // If populate returned null, restore original ObjectId from raw document
+      if (!doc.fromManufacturer && rawDoc && rawDoc.fromManufacturer) {
+        doc.fromManufacturer = rawDoc.fromManufacturer;
+      }
+      if (!doc.toDistributor && rawDoc && rawDoc.toDistributor) {
+        doc.toDistributor = rawDoc.toDistributor;
+      }
+      if (!doc.drug && rawDoc && rawDoc.drug) {
+        doc.drug = rawDoc.drug;
+      }
+      return ManufacturerInvoiceMapper.toDomain(doc);
+    });
   }
 
   async findByDrug(drugId) {

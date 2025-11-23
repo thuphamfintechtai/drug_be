@@ -117,6 +117,8 @@ export class ProductionController {
         vatAmount,
         finalAmount,
         notes,
+        batchNumber,
+        chainTxHash,
       } = req.body;
 
       const manufacturerId =
@@ -155,7 +157,9 @@ export class ProductionController {
         vatRate,
         vatAmount,
         finalAmount,
-        notes
+        notes,
+        batchNumber,
+        chainTxHash
       );
 
       return res.status(201).json({

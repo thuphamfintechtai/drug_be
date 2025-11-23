@@ -57,7 +57,9 @@ export class ProductionApplicationService {
     vatRate = null,
     vatAmount = null,
     finalAmount = null,
-    notes = null
+    notes = null,
+    batchNumber = null,
+    chainTxHash = null
   ) {
     return await this._transferToDistributorUseCase.execute(
       manufacturerId,
@@ -72,7 +74,9 @@ export class ProductionApplicationService {
       vatRate,
       vatAmount,
       finalAmount,
-      notes
+      notes,
+      batchNumber,
+      chainTxHash
     );
   }
 
