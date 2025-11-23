@@ -14,7 +14,7 @@ export class UploadIPFSUseCase {
     const ipfsResult = await this._ipfsService.uploadFolderToIPFS(dto.quantity, dto.metadata);
 
     // Save IPFS status to database (ManufactureIPFSStatus)
-    const ManufactureIPFSStatusModel = (await import("../../../../models/manufactureIPFSStatus.js")).default;
+    const { ManufactureIPFSStatusModel } = await import("../../infrastructure/persistence/mongoose/schemas/ManufactureIPFSStatusSchema.js");
     const { PharmaCompanyModel } = (await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"));
 
     // Find PharmaCompany by manufacturerId (could be _id or user id)

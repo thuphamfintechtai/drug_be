@@ -91,7 +91,7 @@ export class MintNFTUseCase {
     await this._nftRepository.saveMany(nfts);
 
     // Update ManufactureIPFSStatus from "Pending" to "SuccessFully"
-    const ManufactureIPFSStatusModel = (await import("../../../../models/manufactureIPFSStatus.js")).default;
+    const { ManufactureIPFSStatusModel } = await import("../../infrastructure/persistence/mongoose/schemas/ManufactureIPFSStatusSchema.js");
     const { PharmaCompanyModel } = (await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"));
 
     // Find PharmaCompany by manufacturerId (could be _id or user id)
