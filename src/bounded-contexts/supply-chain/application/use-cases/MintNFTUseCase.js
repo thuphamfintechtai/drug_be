@@ -23,12 +23,17 @@ export class MintNFTUseCase {
     dto.validate();
 
     // Check drug exists and belongs to manufacturer
-    const drug = await this._drugInfoRepository.findById(dto.drugId);
+    // Try to find by ID, ATC code, or name
+    let drug = await this._drugInfoRepository.findByIdOrCodeOrName(dto.drugId, manufacturerId);
+    
     if (!drug) {
       throw new DrugNotFoundException(`Thuốc với ID ${dto.drugId} không tồn tại`);
     }
 
-    if (drug.manufacturerId !== manufacturerId) {
+    // Verify ownership - convert both to string for comparison
+    const drugManufacturerId = String(drug.manufacturerId || "");
+    const userManufacturerId = String(manufacturerId || "");
+    if (drugManufacturerId !== userManufacturerId) {
       throw new Error("Bạn không có quyền mint NFT cho thuốc này");
     }
 

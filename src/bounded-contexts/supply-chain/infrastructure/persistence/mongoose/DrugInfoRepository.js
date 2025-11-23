@@ -19,6 +19,82 @@ export class DrugInfoRepository extends IDrugInfoRepository {
     return DrugInfoMapper.toDomain(document);
   }
 
+  async findByIdOrCodeOrName(identifier, manufacturerId = null) {
+    // Try to find by ObjectId first
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      const document = await DrugInfoModel.findById(identifier).populate("manufacturer");
+      if (document) {
+        const drug = DrugInfoMapper.toDomain(document);
+        // If manufacturerId is provided, verify ownership
+        if (manufacturerId && drug) {
+          const drugManufacturerId = String(drug.manufacturerId || "");
+          const userManufacturerId = String(manufacturerId || "");
+          if (drugManufacturerId === userManufacturerId) {
+            return drug;
+          }
+        } else if (drug) {
+          return drug;
+        }
+      }
+    }
+
+    // Try to find by ATC code
+    const atcDocument = await DrugInfoModel.findOne({ atcCode: identifier.toUpperCase() }).populate("manufacturer");
+    if (atcDocument) {
+      const drug = DrugInfoMapper.toDomain(atcDocument);
+      // If manufacturerId is provided, verify ownership
+      if (manufacturerId && drug) {
+        const drugManufacturerId = String(drug.manufacturerId || "");
+        const userManufacturerId = String(manufacturerId || "");
+        if (drugManufacturerId === userManufacturerId) {
+          return drug;
+        }
+      } else if (drug) {
+        return drug;
+      }
+    }
+
+    // Try to find by tradeName (exact match or contains)
+    const nameQuery = {
+      $or: [
+        { tradeName: identifier },
+        { tradeName: { $regex: identifier, $options: "i" } },
+        { genericName: { $regex: identifier, $options: "i" } }
+      ]
+    };
+    
+    if (manufacturerId) {
+      nameQuery.manufacturer = manufacturerId;
+    }
+
+    const nameDocument = await DrugInfoModel.findOne(nameQuery).populate("manufacturer");
+    if (nameDocument) {
+      return DrugInfoMapper.toDomain(nameDocument);
+    }
+
+    // Try to extract ATC code from format like "VITAMIN C (N19092005)"
+    const match = identifier.match(/\(([^)]+)\)/);
+    if (match && match[1]) {
+      const extractedCode = match[1].trim();
+      const codeDocument = await DrugInfoModel.findOne({ atcCode: extractedCode.toUpperCase() }).populate("manufacturer");
+      if (codeDocument) {
+        const drug = DrugInfoMapper.toDomain(codeDocument);
+        // If manufacturerId is provided, verify ownership
+        if (manufacturerId && drug) {
+          const drugManufacturerId = String(drug.manufacturerId || "");
+          const userManufacturerId = String(manufacturerId || "");
+          if (drugManufacturerId === userManufacturerId) {
+            return drug;
+          }
+        } else if (drug) {
+          return drug;
+        }
+      }
+    }
+
+    return null;
+  }
+
   async findByManufacturer(manufacturerId) {
     const documents = await DrugInfoModel.find({ manufacturer: manufacturerId });
     return documents.map((doc) => DrugInfoMapper.toDomain(doc));
