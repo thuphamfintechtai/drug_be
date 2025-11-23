@@ -290,7 +290,54 @@ export class ProductionApplicationService {
         manufacturerId,
         filters
       );
-    return invoices;
+    
+    // Get documents with populated distributor info
+    const { ManufacturerInvoiceModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
+    
+    let query = { fromManufacturer: manufacturerId };
+    if (filters.status) {
+      query.status = filters.status;
+    }
+    if (filters.search) {
+      query.$or = [
+        { invoiceNumber: { $regex: filters.search, $options: "i" } },
+        { batchNumber: { $regex: filters.search, $options: "i" } },
+      ];
+    }
+    
+    const documents = await ManufacturerInvoiceModel.find(query)
+      .populate("toDistributor", "fullName username")
+      .sort({ createdAt: -1 });
+    
+    // Map invoices with distributor info
+    return invoices.map(invoice => {
+      const doc = documents.find(d => d.invoiceNumber === invoice.invoiceNumber);
+      return {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        fromManufacturerId: invoice.fromManufacturerId,
+        toDistributorId: invoice.toDistributorId,
+        drugId: invoice.drugId,
+        proofOfProductionId: invoice.proofOfProductionId,
+        nftInfoId: invoice.nftInfoId,
+        invoiceDate: invoice.invoiceDate,
+        quantity: invoice.quantity,
+        unitPrice: invoice.unitPrice,
+        totalAmount: invoice.totalAmount,
+        vatRate: invoice.vatRate,
+        vatAmount: invoice.vatAmount,
+        finalAmount: invoice.finalAmount,
+        notes: invoice.notes,
+        status: invoice.status,
+        chainTxHash: invoice.chainTxHash,
+        tokenIds: invoice.tokenIds,
+        createdAt: invoice.createdAt,
+        updatedAt: invoice.updatedAt,
+        distributorName: doc?.toDistributor?.fullName || doc?.toDistributor?.username || null,
+      };
+    });
   }
 
   async getAvailableTokensForProduction(proofOfProductionId) {

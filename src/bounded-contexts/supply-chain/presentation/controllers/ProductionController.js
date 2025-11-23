@@ -230,9 +230,8 @@ export class ProductionController {
         });
       }
 
-      // Update invoice with transaction hash
-      invoice.setChainTxHash(transactionHash);
-      invoice.markAsDelivered(transactionHash);
+      // Update invoice with transaction hash and mark as sent
+      invoice.send(transactionHash);
 
       // Update NFTs with transaction hash
       const nfts = await this._nftRepository.findByTokenIds(tokenIds);
@@ -331,6 +330,7 @@ export class ProductionController {
           id: inv.id,
           invoiceNumber: inv.invoiceNumber,
           distributorId: inv.toDistributorId,
+          distributorName: inv.distributorName || null,
           drugId: inv.drugId,
           quantity: inv.quantity,
           status: inv.status,

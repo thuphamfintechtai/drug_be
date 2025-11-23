@@ -133,6 +133,8 @@ export class DrugController {
           tradeName: drug.drugName,
           genericName: drug.genericName,
           atcCode: drug.atcCode,
+          dosageForm: drug.dosageForm,
+          strength: drug.strength,
           status: drug.status,
           manufacturerId: drug.manufacturerId,
           createdAt: drug.createdAt,

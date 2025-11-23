@@ -9,6 +9,7 @@ import crypto from "crypto";
 export const InvoiceStatus = {
   PENDING: "pending",
   ISSUED: "issued",
+  SENT: "sent",
   CONFIRMED: "confirmed",
   DELIVERED: "delivered",
   CANCELLED: "cancelled",
@@ -208,9 +209,20 @@ export class ManufacturerInvoice extends AggregateRoot {
     this._updatedAt = new Date();
   }
 
-  confirm() {
+  send(chainTxHash = null) {
     if (this._status !== InvoiceStatus.ISSUED) {
-      throw new Error("Chỉ có thể confirm invoice ở trạng thái issued");
+      throw new Error("Chỉ có thể send invoice ở trạng thái issued");
+    }
+    this._status = InvoiceStatus.SENT;
+    if (chainTxHash) {
+      this._chainTxHash = TransactionHash.create(chainTxHash);
+    }
+    this._updatedAt = new Date();
+  }
+
+  confirm() {
+    if (this._status !== InvoiceStatus.SENT) {
+      throw new Error("Chỉ có thể confirm invoice ở trạng thái sent");
     }
     this._status = InvoiceStatus.CONFIRMED;
     this._updatedAt = new Date();

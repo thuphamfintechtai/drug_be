@@ -95,6 +95,10 @@ export class ConfirmReceiptUseCase {
 
     await this._proofOfDistributionRepository.save(proofOfDistribution);
 
+    // Confirm invoice status
+    invoice.confirm();
+    await this._manufacturerInvoiceRepository.save(invoice);
+
     // Publish domain events
     proofOfDistribution.domainEvents.forEach(event => {
       this._eventBus.publish(event);
@@ -103,6 +107,7 @@ export class ConfirmReceiptUseCase {
     return {
       proofOfDistributionId: proofOfDistribution.id,
       invoiceId: invoice.id,
+      invoiceStatus: invoice.status,
       status: proofOfDistribution.status,
       batchNumber: proofOfDistribution.batchNumber,
     };

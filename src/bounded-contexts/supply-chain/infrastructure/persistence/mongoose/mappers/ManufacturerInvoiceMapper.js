@@ -11,13 +11,28 @@ export class ManufacturerInvoiceMapper {
       return null;
     }
 
+    // Handle populated objects - extract _id if it's an object
+    const getObjectId = (field) => {
+      if (!field) return null;
+      if (typeof field === 'object' && field._id) {
+        return field._id.toString();
+      }
+      if (typeof field === 'object' && field.toString) {
+        return field.toString();
+      }
+      if (typeof field === 'string') {
+        return field;
+      }
+      return field;
+    };
+
     return new ManufacturerInvoice(
       document._id.toString(),
-      document.fromManufacturer?.toString() || document.fromManufacturer,
-      document.toDistributor?.toString() || document.toDistributor,
-      document.drug?.toString() || document.drug,
-      document.proofOfProduction?.toString() || null,
-      document.nftInfo?.toString() || null,
+      getObjectId(document.fromManufacturer),
+      getObjectId(document.toDistributor),
+      getObjectId(document.drug),
+      getObjectId(document.proofOfProduction),
+      getObjectId(document.nftInfo),
       document.invoiceNumber,
       document.invoiceDate || null,
       document.quantity || 0,
