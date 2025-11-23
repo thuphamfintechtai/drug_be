@@ -76,31 +76,42 @@ export class ProductionApplicationService {
   }
 
   async getProductionHistory(manufacturerId, filters = {}) {
-    const productions =
-      await this._proofOfProductionRepository.findByManufacturer(
-        manufacturerId
-      );
+    const { ProofOfProductionModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfProductionSchema.js"
+    );
 
-    let filtered = productions;
+    const query = { manufacturer: manufacturerId };
 
-    if (filters.status) {
-      filtered = filtered.filter((p) => p.status === filters.status);
-    }
+    // if (filters.status) {
+    //   query.status = filters.status;
+    // }
 
-    if (filters.batchNumber) {
-      filtered = filtered.filter((p) =>
-        p.batchNumber.includes(filters.batchNumber)
-      );
-    }
+    // if (filters.batchNumber) {
+    //   query.batchNumber = { $regex: filters.batchNumber, $options: "i" };
+    // }
 
-    if (filters.startDate && filters.endDate) {
-      filtered = filtered.filter((p) => {
-        const date = p.createdAt;
-        return date >= filters.startDate && date <= filters.endDate;
-      });
-    }
+    // if (filters.startDate && filters.endDate) {
+    //   query.createdAt = {
+    //     $gte: filters.startDate,
+    //     $lte: filters.endDate,
+    //   };
+    // }
 
-    return filtered;
+    const documents = await ProofOfProductionModel.find(query)
+      .populate("drug")
+      .sort({ createdAt: -1 });
+
+    return documents.map((doc) => ({
+      id: doc._id.toString(),
+      batchNumber: doc.batchNumber,
+      drug: doc.drug ? doc.drug.toObject() : null,
+      quantity: doc.quantity,
+      mfgDate: doc.mfgDate,
+      expDate: doc.expDate,
+      status: doc.status,
+      chainTxHash: doc.chainTxHash,
+      createdAt: doc.createdAt,
+    }));
   }
 
   async getStatistics(manufacturerId) {
@@ -202,7 +213,7 @@ export class ProductionApplicationService {
       "../../../registration/infrastructure/persistence/BusinessEntityRepository.js"
     );
     const businessEntityRepo = new BusinessEntityRepository();
-    
+
     const pharmaCompany = await businessEntityRepo.findByUserId(
       user.id || user._id?.toString(),
       "pharma_company"

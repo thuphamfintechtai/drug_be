@@ -12,7 +12,8 @@ export class ProductionController {
   async uploadIPFS(req, res) {
     try {
       const dto = UploadIPFSDTO.fromRequest(req);
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
 
       if (!manufacturerId) {
         return res.status(403).json({
@@ -23,7 +24,10 @@ export class ProductionController {
 
       dto.validate();
 
-      const result = await this._productionService.uploadIPFS(dto, manufacturerId);
+      const result = await this._productionService.uploadIPFS(
+        dto,
+        manufacturerId
+      );
 
       return res.status(200).json({
         success: true,
@@ -50,7 +54,8 @@ export class ProductionController {
   async saveMintedNFTs(req, res) {
     try {
       const dto = MintNFTDTO.fromRequest(req);
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
 
       if (!manufacturerId) {
         return res.status(403).json({
@@ -76,7 +81,12 @@ export class ProductionController {
         });
       }
 
-      if (error.message && (error.message.includes("đã tồn tại") || error.message.includes("không có quyền") || error.message.includes("là bắt buộc"))) {
+      if (
+        error.message &&
+        (error.message.includes("đã tồn tại") ||
+          error.message.includes("không có quyền") ||
+          error.message.includes("là bắt buộc"))
+      ) {
         return res.status(400).json({
           success: false,
           message: error.message,
@@ -109,7 +119,8 @@ export class ProductionController {
         notes,
       } = req.body;
 
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
 
       if (!manufacturerId) {
         return res.status(403).json({
@@ -118,7 +129,13 @@ export class ProductionController {
         });
       }
 
-      if (!distributorId || !drugId || !tokenIds || !Array.isArray(tokenIds) || tokenIds.length === 0) {
+      if (
+        !distributorId ||
+        !drugId ||
+        !tokenIds ||
+        !Array.isArray(tokenIds) ||
+        tokenIds.length === 0
+      ) {
         return res.status(400).json({
           success: false,
           message: "distributorId, drugId và tokenIds là bắt buộc",
@@ -154,7 +171,11 @@ export class ProductionController {
         });
       }
 
-      if (error.message && (error.message.includes("không có quyền") || error.message.includes("không thể chuyển giao"))) {
+      if (
+        error.message &&
+        (error.message.includes("không có quyền") ||
+          error.message.includes("không thể chuyển giao"))
+      ) {
         return res.status(400).json({
           success: false,
           message: error.message,
@@ -173,7 +194,8 @@ export class ProductionController {
   async saveTransferTransaction(req, res) {
     try {
       const { invoiceId, transactionHash, tokenIds } = req.body;
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
 
       if (!manufacturerId) {
         return res.status(403).json({
@@ -190,7 +212,9 @@ export class ProductionController {
       }
 
       // Find invoice
-      const invoice = await this._manufacturerInvoiceRepository.findById(invoiceId);
+      const invoice = await this._manufacturerInvoiceRepository.findById(
+        invoiceId
+      );
       if (!invoice) {
         return res.status(404).json({
           success: false,
@@ -242,7 +266,8 @@ export class ProductionController {
 
   async getProductionHistory(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
 
       if (!manufacturerId) {
         return res.status(403).json({
@@ -258,21 +283,14 @@ export class ProductionController {
         endDate: req.query.endDate ? new Date(req.query.endDate) : null,
       };
 
-      const productions = await this._productionService.getProductionHistory(manufacturerId, filters);
+      const productions = await this._productionService.getProductionHistory(
+        manufacturerId,
+        filters
+      );
 
       return res.status(200).json({
         success: true,
-        data: productions.map(p => ({
-          id: p.id,
-          batchNumber: p.batchNumber,
-          drugId: p.drugId,
-          quantity: p.quantity,
-          mfgDate: p.mfgDate,
-          expDate: p.expDate,
-          status: p.status,
-          chainTxHash: p.chainTxHash,
-          createdAt: p.createdAt,
-        })),
+        data: productions,
         count: productions.length,
       });
     } catch (error) {
@@ -287,7 +305,8 @@ export class ProductionController {
 
   async getTransferHistory(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
 
       if (!manufacturerId) {
         return res.status(403).json({
@@ -301,11 +320,14 @@ export class ProductionController {
         search: req.query.search,
       };
 
-      const invoices = await this._productionService.getTransferHistory(manufacturerId, filters);
+      const invoices = await this._productionService.getTransferHistory(
+        manufacturerId,
+        filters
+      );
 
       return res.status(200).json({
         success: true,
-        data: invoices.map(inv => ({
+        data: invoices.map((inv) => ({
           id: inv.id,
           invoiceNumber: inv.invoiceNumber,
           distributorId: inv.toDistributorId,
@@ -331,7 +353,8 @@ export class ProductionController {
   async getAvailableTokensForProduction(req, res) {
     try {
       const { productionId } = req.params;
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
 
       if (!manufacturerId) {
         return res.status(403).json({
@@ -340,7 +363,10 @@ export class ProductionController {
         });
       }
 
-      const result = await this._productionService.getAvailableTokensForProduction(productionId);
+      const result =
+        await this._productionService.getAvailableTokensForProduction(
+          productionId
+        );
 
       return res.status(200).json({
         success: true,
@@ -365,7 +391,8 @@ export class ProductionController {
 
   async getStatistics(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
 
       if (!manufacturerId) {
         return res.status(403).json({
@@ -374,7 +401,9 @@ export class ProductionController {
         });
       }
 
-      const statistics = await this._productionService.getStatistics(manufacturerId);
+      const statistics = await this._productionService.getStatistics(
+        manufacturerId
+      );
 
       return res.status(200).json({
         success: true,
@@ -392,7 +421,8 @@ export class ProductionController {
 
   async getProfile(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
       const user = req.user;
 
       if (!manufacturerId) {
@@ -402,7 +432,10 @@ export class ProductionController {
         });
       }
 
-      const profile = await this._productionService.getProfile(manufacturerId, user);
+      const profile = await this._productionService.getProfile(
+        manufacturerId,
+        user
+      );
 
       return res.status(200).json({
         success: true,
@@ -427,7 +460,8 @@ export class ProductionController {
 
   async getDistributors(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
 
       if (!manufacturerId) {
         return res.status(403).json({
@@ -469,7 +503,8 @@ export class ProductionController {
 
   async getChartOneWeek(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
       const user = req.user;
 
       if (!manufacturerId) {
@@ -479,7 +514,9 @@ export class ProductionController {
         });
       }
 
-      const result = await this._productionService.getChartOneWeek(manufacturerId);
+      const result = await this._productionService.getChartOneWeek(
+        manufacturerId
+      );
 
       return res.status(200).json({
         success: true,
@@ -497,7 +534,8 @@ export class ProductionController {
 
   async getChartTodayYesterday(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
       const user = req.user;
 
       if (!manufacturerId) {
@@ -507,7 +545,9 @@ export class ProductionController {
         });
       }
 
-      const result = await this._productionService.getChartTodayYesterday(manufacturerId);
+      const result = await this._productionService.getChartTodayYesterday(
+        manufacturerId
+      );
 
       return res.status(200).json({
         success: true,
@@ -525,7 +565,8 @@ export class ProductionController {
 
   async getProductionsByDateRange(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
       const { startDate, endDate } = req.query;
 
       if (!manufacturerId) {
@@ -542,21 +583,32 @@ export class ProductionController {
         });
       }
 
-      const result = await this._productionService.getProductionsByDateRange(manufacturerId, startDate, endDate);
+      const result = await this._productionService.getProductionsByDateRange(
+        manufacturerId,
+        startDate,
+        endDate
+      );
 
       return res.status(200).json({
         success: true,
         data: result,
       });
     } catch (error) {
-      if (error.message && (error.message.includes("startDate") || error.message.includes("endDate"))) {
+      if (
+        error.message &&
+        (error.message.includes("startDate") ||
+          error.message.includes("endDate"))
+      ) {
         return res.status(400).json({
           success: false,
           message: error.message,
         });
       }
 
-      console.error("Lỗi khi lấy thống kê productions theo khoảng thời gian:", error);
+      console.error(
+        "Lỗi khi lấy thống kê productions theo khoảng thời gian:",
+        error
+      );
       return res.status(500).json({
         success: false,
         message: "Lỗi server khi lấy thống kê",
@@ -567,7 +619,8 @@ export class ProductionController {
 
   async getDistributionsByDateRange(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
       const { startDate, endDate } = req.query;
 
       if (!manufacturerId) {
@@ -584,21 +637,32 @@ export class ProductionController {
         });
       }
 
-      const result = await this._productionService.getDistributionsByDateRange(manufacturerId, startDate, endDate);
+      const result = await this._productionService.getDistributionsByDateRange(
+        manufacturerId,
+        startDate,
+        endDate
+      );
 
       return res.status(200).json({
         success: true,
         data: result,
       });
     } catch (error) {
-      if (error.message && (error.message.includes("startDate") || error.message.includes("endDate"))) {
+      if (
+        error.message &&
+        (error.message.includes("startDate") ||
+          error.message.includes("endDate"))
+      ) {
         return res.status(400).json({
           success: false,
           message: error.message,
         });
       }
 
-      console.error("Lỗi khi lấy thống kê distributions theo khoảng thời gian:", error);
+      console.error(
+        "Lỗi khi lấy thống kê distributions theo khoảng thời gian:",
+        error
+      );
       return res.status(500).json({
         success: false,
         message: "Lỗi server khi lấy thống kê",
@@ -609,7 +673,8 @@ export class ProductionController {
 
   async getTransfersByDateRange(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
       const { startDate, endDate } = req.query;
 
       if (!manufacturerId) {
@@ -626,21 +691,32 @@ export class ProductionController {
         });
       }
 
-      const result = await this._productionService.getTransfersByDateRange(manufacturerId, startDate, endDate);
+      const result = await this._productionService.getTransfersByDateRange(
+        manufacturerId,
+        startDate,
+        endDate
+      );
 
       return res.status(200).json({
         success: true,
         data: result,
       });
     } catch (error) {
-      if (error.message && (error.message.includes("startDate") || error.message.includes("endDate"))) {
+      if (
+        error.message &&
+        (error.message.includes("startDate") ||
+          error.message.includes("endDate"))
+      ) {
         return res.status(400).json({
           success: false,
           message: error.message,
         });
       }
 
-      console.error("Lỗi khi lấy thống kê transfers theo khoảng thời gian:", error);
+      console.error(
+        "Lỗi khi lấy thống kê transfers theo khoảng thời gian:",
+        error
+      );
       return res.status(500).json({
         success: false,
         message: "Lỗi server khi lấy thống kê",
@@ -651,7 +727,8 @@ export class ProductionController {
 
   async getIPFSStatus(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
       const user = req.user;
 
       if (!manufacturerId) {
@@ -661,14 +738,17 @@ export class ProductionController {
         });
       }
 
-      const result = await this._productionService.getIPFSStatus(manufacturerId, user);
+      const result = await this._productionService.getIPFSStatus(
+        manufacturerId,
+        user
+      );
 
       return res.status(200).json({
         success: true,
         message: "Đã tìm thấy thông tin IPFS của Manufacture",
         data: {
-          ManufactureIPFSStatus: result.ipfsStatuses
-        }
+          ManufactureIPFSStatus: result.ipfsStatuses,
+        },
       });
     } catch (error) {
       if (error.message && error.message.includes("Không tìm thấy")) {
@@ -689,7 +769,8 @@ export class ProductionController {
 
   async getIPFSStatusUndone(req, res) {
     try {
-      const manufacturerId = req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
+      const manufacturerId =
+        req.user?.pharmaCompanyId || req.pharmaCompany?._id?.toString();
       const user = req.user;
 
       if (!manufacturerId) {
@@ -699,14 +780,17 @@ export class ProductionController {
         });
       }
 
-      const result = await this._productionService.getIPFSStatusUndone(manufacturerId, user);
+      const result = await this._productionService.getIPFSStatusUndone(
+        manufacturerId,
+        user
+      );
 
       return res.status(200).json({
         success: true,
         message: "Đã tìm thấy thông tin IPFS của Manufacture",
         data: {
-          ManufactureIPFSStatus: result.ipfsStatuses
-        }
+          ManufactureIPFSStatus: result.ipfsStatuses,
+        },
       });
     } catch (error) {
       if (error.message && error.message.includes("Không tìm thấy")) {
@@ -725,4 +809,3 @@ export class ProductionController {
     }
   }
 }
-
