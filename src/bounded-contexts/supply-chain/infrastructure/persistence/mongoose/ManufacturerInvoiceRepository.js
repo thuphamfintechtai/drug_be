@@ -55,7 +55,13 @@ export class ManufacturerInvoiceRepository extends IManufacturerInvoiceRepositor
   }
 
   async findByDistributor(distributorId, filters = {}) {
-    let query = { toDistributor: distributorId };
+    // Ensure distributorId is converted to ObjectId if it's a valid ObjectId string
+    let queryDistributorId = distributorId;
+    if (mongoose.Types.ObjectId.isValid(distributorId)) {
+      queryDistributorId = new mongoose.Types.ObjectId(distributorId);
+    }
+    
+    let query = { toDistributor: queryDistributorId };
 
     if (filters.status) {
       query.status = filters.status;

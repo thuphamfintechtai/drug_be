@@ -31,6 +31,7 @@ export class ProductionApplicationService {
       drugInfoRepository,
       nftRepository,
       manufacturerInvoiceRepository,
+      proofOfProductionRepository,
       eventBus
     );
   }

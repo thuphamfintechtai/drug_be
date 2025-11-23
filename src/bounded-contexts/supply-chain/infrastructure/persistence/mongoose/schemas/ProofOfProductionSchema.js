@@ -48,7 +48,7 @@ export const ProofOfProductionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "completed", "failed"],
+      enum: ["pending", "completed", "distributed", "failed"],
       default: "pending",
     },
   },

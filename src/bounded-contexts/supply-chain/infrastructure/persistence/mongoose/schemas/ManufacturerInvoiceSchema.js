@@ -58,6 +58,11 @@ export const ManufacturerInvoiceSchema = new mongoose.Schema(
       ref: "NFTInfo",
       required: false,
     },
+    drug: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DrugInfo",
+      required: false,
+    },
     invoiceNumber: {
       type: String,
       required: true,
@@ -109,7 +114,7 @@ export const ManufacturerInvoiceSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["draft", "pending", "issued", "sent", "paid", "cancelled"],
+      enum: ["draft", "pending", "issued", "confirmed", "delivered", "sent", "paid", "cancelled"],
       default: "pending",
     },
     chainTxHash: {
@@ -146,6 +151,7 @@ export const ManufacturerInvoiceSchema = new mongoose.Schema(
 // Note: invoiceNumber already has index from unique: true
 ManufacturerInvoiceSchema.index({ fromManufacturer: 1 });
 ManufacturerInvoiceSchema.index({ toDistributor: 1 });
+ManufacturerInvoiceSchema.index({ drug: 1 });
 ManufacturerInvoiceSchema.index({ status: 1 });
 ManufacturerInvoiceSchema.index({ batchNumber: 1 });
 ManufacturerInvoiceSchema.index({ createdAt: -1 });

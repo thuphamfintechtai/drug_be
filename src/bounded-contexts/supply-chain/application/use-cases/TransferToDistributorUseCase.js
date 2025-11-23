@@ -8,11 +8,13 @@ export class TransferToDistributorUseCase {
     drugInfoRepository,
     nftRepository,
     manufacturerInvoiceRepository,
+    proofOfProductionRepository,
     eventBus
   ) {
     this._drugInfoRepository = drugInfoRepository;
     this._nftRepository = nftRepository;
     this._manufacturerInvoiceRepository = manufacturerInvoiceRepository;
+    this._proofOfProductionRepository = proofOfProductionRepository;
     this._eventBus = eventBus;
   }
 
@@ -31,6 +33,21 @@ export class TransferToDistributorUseCase {
     finalAmount = null,
     notes = null
   ) {
+    // Convert distributorId to User ID if it's a Distributor entity ID
+    let finalDistributorId = distributorId;
+    const { DistributorModel } = await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js");
+    const mongoose = await import("mongoose");
+    
+    // Check if distributorId is a valid ObjectId
+    if (mongoose.default.Types.ObjectId.isValid(distributorId)) {
+      // Try to find Distributor entity by ID
+      const distributorEntity = await DistributorModel.findById(distributorId);
+      if (distributorEntity && distributorEntity.user) {
+        // If found, use the User ID instead
+        finalDistributorId = distributorEntity.user.toString();
+      }
+    }
+
     // Check drug exists and belongs to manufacturer
     const drug = await this._drugInfoRepository.findById(drugId);
     if (!drug) {
@@ -71,13 +88,22 @@ export class TransferToDistributorUseCase {
     const proofOfProductionId = nfts[0]?.proofOfProductionId || null;
     const nftInfoId = nfts[0]?.id || null;
 
+    // Update ProofOfProduction status to "distributed" if exists
+    if (proofOfProductionId && this._proofOfProductionRepository) {
+      const proofOfProduction = await this._proofOfProductionRepository.findById(proofOfProductionId);
+      if (proofOfProduction) {
+        proofOfProduction.markAsDistributed();
+        await this._proofOfProductionRepository.save(proofOfProduction);
+      }
+    }
+
     // Generate invoice number if not provided
     const finalInvoiceNumber = invoiceNumber || `INV-${Date.now()}-${crypto.randomUUID().substring(0, 8)}`;
 
     // Create manufacturer invoice
     const invoice = ManufacturerInvoice.create(
       manufacturerId,
-      distributorId,
+      finalDistributorId,
       drugId,
       finalInvoiceNumber,
       calculatedQuantity,

@@ -6,6 +6,7 @@ import crypto from "crypto";
 export const ProductionStatus = {
   PENDING: "pending",
   COMPLETED: "completed",
+  DISTRIBUTED: "distributed",
   FAILED: "failed",
 };
 
@@ -123,6 +124,14 @@ export class ProofOfProduction extends AggregateRoot {
     this._updatedAt = new Date();
   }
 
+  markAsDistributed() {
+    if (this._status !== ProductionStatus.COMPLETED) {
+      throw new Error("Chỉ có thể đánh dấu distributed khi production đã completed");
+    }
+    this._status = ProductionStatus.DISTRIBUTED;
+    this._updatedAt = new Date();
+  }
+
   markAsFailed() {
     this._status = ProductionStatus.FAILED;
     this._updatedAt = new Date();
@@ -134,6 +143,10 @@ export class ProofOfProduction extends AggregateRoot {
 
   isPending() {
     return this._status === ProductionStatus.PENDING;
+  }
+
+  isDistributed() {
+    return this._status === ProductionStatus.DISTRIBUTED;
   }
 }
 
