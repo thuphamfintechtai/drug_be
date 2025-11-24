@@ -10,20 +10,51 @@ export class ProofOfDistributionMapper {
       return null;
     }
 
+    const extractId = (value) => {
+      if (!value) return null;
+      if (typeof value === "string") return value;
+      if (value._id) return value._id.toString();
+      if (value.toString) {
+        const str = value.toString();
+        if (/^[0-9a-fA-F]{24}$/.test(str)) {
+          return str;
+        }
+      }
+      return null;
+    };
+
+    const manufacturerInfo = document.fromManufacturer
+      ? {
+          id: extractId(document.fromManufacturer),
+          name:
+            document.fromManufacturer.fullName ||
+            document.fromManufacturer.username ||
+            document.fromManufacturer.email ||
+            null,
+          email: document.fromManufacturer.email || null,
+        }
+      : null;
+
+    const tokenIds =
+      (document.manufacturerInvoice && document.manufacturerInvoice.tokenIds) ||
+      [];
+
     return new ProofOfDistribution(
       document._id.toString(),
-      document.fromManufacturer?.toString() || document.fromManufacturer,
-      document.toDistributor?.toString() || document.toDistributor,
-      document.manufacturerInvoice?.toString() || null,
-      document.proofOfProduction?.toString() || null,
-      document.nftInfo?.toString() || null,
+      extractId(document.fromManufacturer),
+      extractId(document.toDistributor),
+      extractId(document.manufacturerInvoice),
+      extractId(document.proofOfProduction),
+      extractId(document.nftInfo),
       document.distributionDate || null,
       document.distributedQuantity || 0,
       document.batchNumber || null,
       document.status || DistributionStatus.PENDING,
       document.chainTxHash || null,
       document.transferTxHash || null,
-      document.notes || null
+      document.notes || null,
+      tokenIds,
+      manufacturerInfo
     );
   }
 

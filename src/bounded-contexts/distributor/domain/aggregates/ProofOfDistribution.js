@@ -27,7 +27,9 @@ export class ProofOfDistribution extends AggregateRoot {
     status = DistributionStatus.PENDING,
     chainTxHash = null,
     transferTxHash = null,
-    notes = null
+    notes = null,
+    tokenIds = [],
+    manufacturerInfo = null
   ) {
     super(id);
     this._fromManufacturerId = fromManufacturerId;
@@ -44,6 +46,8 @@ export class ProofOfDistribution extends AggregateRoot {
     this._notes = notes;
     this._createdAt = new Date();
     this._updatedAt = new Date();
+    this._tokenIds = Array.isArray(tokenIds) ? tokenIds : [];
+    this._manufacturerInfo = manufacturerInfo;
   }
 
   static create(
@@ -54,7 +58,9 @@ export class ProofOfDistribution extends AggregateRoot {
     proofOfProductionId = null,
     nftInfoId = null,
     distributionDate = null,
-    batchNumber = null
+    batchNumber = null,
+    tokenIds = [],
+    manufacturerInfo = null
   ) {
     const id = crypto.randomUUID();
     const proof = new ProofOfDistribution(
@@ -70,7 +76,9 @@ export class ProofOfDistribution extends AggregateRoot {
       DistributionStatus.PENDING,
       null,
       null,
-      null
+      null,
+      Array.isArray(tokenIds) ? tokenIds : [],
+      manufacturerInfo || null
     );
 
     // Emit domain event
@@ -140,6 +148,14 @@ export class ProofOfDistribution extends AggregateRoot {
 
   get notes() {
     return this._notes;
+  }
+
+  get tokenIds() {
+    return [...this._tokenIds];
+  }
+
+  get manufacturerInfo() {
+    return this._manufacturerInfo;
   }
 
   get createdAt() {

@@ -259,10 +259,13 @@ export class DistributorController {
         data: distributions.map(dist => ({
           id: dist.id,
           manufacturerId: dist.fromManufacturerId,
+          manufacturer: dist.manufacturerInfo || null,
           batchNumber: dist.batchNumber,
           quantity: dist.distributedQuantity,
           status: dist.status,
           distributionDate: dist.distributionDate,
+          tokenIds: dist.tokenIds,
+          chainTxHash: dist.chainTxHash,
           createdAt: dist.createdAt,
         })),
         count: distributions.length,

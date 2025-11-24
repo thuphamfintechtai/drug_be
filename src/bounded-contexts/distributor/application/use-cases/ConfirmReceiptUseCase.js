@@ -106,7 +106,8 @@ export class ConfirmReceiptUseCase {
         invoice.proofOfProductionId,
         invoice.nftInfoId,
         dto.distributionDate || new Date(),
-        batchNumber ? BatchNumber.create(batchNumber) : null
+        batchNumber ? BatchNumber.create(batchNumber) : null,
+        invoice.tokenIds || []
       );
       
       proofOfDistribution.confirmReceipt();
