@@ -60,6 +60,10 @@ export class TransferToDistributorUseCase {
       throw new Error("Bạn không có quyền chuyển giao thuốc này");
     }
 
+    if (!Array.isArray(tokenIds) || tokenIds.length === 0) {
+      throw new Error("tokenIds là bắt buộc và phải là mảng");
+    }
+
     // Check NFTs exist and belong to manufacturer
     const nfts = await this._nftRepository.findByTokenIds(tokenIds);
     if (nfts.length !== tokenIds.length) {
@@ -83,12 +87,30 @@ export class TransferToDistributorUseCase {
       }
     }
 
-    // Calculate quantity if not provided
-    const calculatedQuantity = quantity || nfts.length;
+    // Ensure quantity matches token count
+    if (quantity && quantity !== nfts.length) {
+      throw new Error("quantity phải trùng với số lượng tokenIds");
+    }
+    const calculatedQuantity = nfts.length;
 
     // Get proof of production from first NFT (all should have same batch)
     const proofOfProductionId = nfts[0]?.proofOfProductionId || null;
+    if (!proofOfProductionId) {
+      throw new Error("NFT phải có proofOfProduction trước khi chuyển giao");
+    }
     const nftInfoId = nfts[0]?.id || null;
+
+    // Validate batch consistency when provided
+    if (batchNumber) {
+      const mismatchedToken = nfts.find(
+        (nft) => nft.batchNumber && nft.batchNumber !== batchNumber
+      );
+      if (mismatchedToken) {
+        throw new Error(
+          `NFT ${mismatchedToken.tokenId} không thuộc batch ${batchNumber}`
+        );
+      }
+    }
 
     // Update ProofOfProduction status to "distributed" if exists
     if (proofOfProductionId && this._proofOfProductionRepository) {

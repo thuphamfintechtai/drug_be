@@ -34,14 +34,28 @@ export class ConfirmReceiptUseCase {
       throw new Error(`Invoice chưa được gửi. Trạng thái hiện tại: ${invoice.status}`);
     }
 
-    // Get batch number from invoice
+    if (!invoice.tokenIds || invoice.tokenIds.length === 0) {
+      throw new Error("Invoice không chứa tokenIds để xác nhận");
+    }
+
+    const nfts = await this._nftRepository.findByTokenIds(invoice.tokenIds);
+    if (nfts.length !== invoice.tokenIds.length) {
+      throw new Error("Danh sách NFT không đầy đủ so với tokenIds của invoice");
+    }
+
+    const unauthorizedNFTs = nfts.filter(nft => nft.ownerId !== pharmacyId);
+    if (unauthorizedNFTs.length > 0) {
+      const tokens = unauthorizedNFTs.map(nft => nft.tokenId).join(", ");
+      throw new Error(
+        `Các NFT chưa thuộc quyền sở hữu pharmacy hiện tại: ${tokens}`
+      );
+    }
+
+    // Get batch number from NFTs
     let batchNumber = null;
-    
-    if (invoice.tokenIds && invoice.tokenIds.length > 0) {
-      const nfts = await this._nftRepository.findByTokenIds(invoice.tokenIds);
-      if (nfts.length > 0 && nfts[0].batchNumber) {
-        batchNumber = nfts[0].batchNumber;
-      }
+    const firstNft = nfts[0];
+    if (firstNft && firstNft.batchNumber) {
+      batchNumber = firstNft.batchNumber;
     }
 
     // Find or create Proof of Pharmacy

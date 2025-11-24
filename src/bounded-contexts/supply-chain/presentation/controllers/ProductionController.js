@@ -231,19 +231,33 @@ export class ProductionController {
         });
       }
 
+      if (invoice.status === "sent") {
+        return res.status(200).json({
+          success: true,
+          message: "Invoice đã được gửi trước đó",
+          data: {
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            status: invoice.status,
+            chainTxHash: invoice.chainTxHash,
+          },
+        });
+      }
+
+      if (invoice.status !== "issued") {
+        return res.status(400).json({
+          success: false,
+          message: `Invoice phải ở trạng thái issued trước khi lưu transaction (current: ${invoice.status})`,
+        });
+      }
+
       // Check ownership
-      console.log("[save-transfer] manufacturerId token =", manufacturerId);
-      console.log("[save-transfer] invoice.fromManufacturerId =", invoice.fromManufacturerId);
-      console.log("[save-transfer] invoiceId =", invoice.id);
       if (invoice.fromManufacturerId !== manufacturerId) {
         return res.status(403).json({
           success: false,
           message: "Bạn không có quyền cập nhật invoice này",
         });
       }
-
-      // Update invoice with transaction hash and mark as sent
-      invoice.send(transactionHash);
 
       const expectedTokens = Array.isArray(invoice.tokenIds)
         ? invoice.tokenIds.map((tid) => tid.toString())
@@ -280,13 +294,27 @@ export class ProductionController {
             message: `NFT ${nft.tokenId} không thuộc manufacturer hiện tại`,
           });
         }
-
-        nft.setMintTransaction(transactionHash);
-        nft.transfer(invoice.toDistributorId, transactionHash);
-        await this._nftRepository.save(nft);
       }
 
-      await this._manufacturerInvoiceRepository.save(invoice);
+      // Update invoice + NFTs trong session MongoDB để đảm bảo consistency
+      const mongoose = await import("mongoose");
+      const session = await mongoose.default.startSession();
+      try {
+        await session.withTransaction(async () => {
+          invoice.send(transactionHash);
+          await this._manufacturerInvoiceRepository.save(invoice, { session });
+
+          await Promise.all(
+            nfts.map((nft) => {
+              nft.setMintTransaction(transactionHash);
+              nft.transfer(invoice.toDistributorId, transactionHash);
+              return this._nftRepository.save(nft, { session });
+            })
+          );
+        });
+      } finally {
+        await session.endSession();
+      }
 
       return res.status(200).json({
         success: true,

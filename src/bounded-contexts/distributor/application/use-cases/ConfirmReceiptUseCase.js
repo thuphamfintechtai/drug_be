@@ -46,10 +46,16 @@ export class ConfirmReceiptUseCase {
       throw new Error("Danh sách NFT không đầy đủ so với tokenIds của invoice");
     }
 
-    const unauthorizedNFT = nfts.find(nft => nft.ownerId !== distributorId);
-    if (unauthorizedNFT) {
+    console.log("Distributor confirm:", {
+      distributorId,
+      nftOwners: nfts.map(nft => ({ tokenId: nft.tokenId, ownerId: nft.ownerId })),
+    });
+
+    const unauthorizedNFTs = nfts.filter(nft => nft.ownerId !== distributorId);
+    if (unauthorizedNFTs.length > 0) {
+      const tokens = unauthorizedNFTs.map(nft => nft.tokenId).join(", ");
       throw new Error(
-        `NFT ${unauthorizedNFT.tokenId} chưa thuộc quyền sở hữu distributor hiện tại`
+        `Các NFT chưa thuộc quyền sở hữu distributor hiện tại: ${tokens}`
       );
     }
 

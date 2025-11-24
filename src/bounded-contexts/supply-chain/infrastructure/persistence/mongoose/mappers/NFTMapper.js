@@ -10,10 +10,27 @@ export class NFTMapper {
       return null;
     }
 
-    // Get manufacturer from drug's manufacturer field
-    let manufacturerId = document.owner?.toString() || null;
+    const extractId = (value) => {
+      if (!value) return null;
+      if (typeof value === "string") {
+        return value;
+      }
+      if (value._id) {
+        return value._id.toString();
+      }
+      if (value.toString) {
+        const str = value.toString();
+        if (/^[0-9a-fA-F]{24}$/.test(str)) {
+          return str;
+        }
+      }
+      return null;
+    };
+
+    const ownerId = extractId(document.owner);
+    let manufacturerId = ownerId;
     if (document.drug && document.drug.manufacturer) {
-      manufacturerId = document.drug.manufacturer?.toString() || document.drug.manufacturer || manufacturerId;
+      manufacturerId = extractId(document.drug.manufacturer) || manufacturerId;
     }
 
     const ipfsHash = document.ipfsHash || document.ipfsUrl
@@ -67,7 +84,7 @@ export class NFTMapper {
       document.quantity || 1,
       document.mfgDate || null,
       document.expDate || null,
-      document.owner?.toString() || null,
+      ownerId,
       document.chainTxHash || null,
       ipfsHash,
       document.metadata || null,
