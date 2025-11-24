@@ -12,7 +12,7 @@ export class CreateContractRequestUseCase {
     this._userRepository = userRepository;
   }
 
-  async execute(dto, distributorId, distributorPrivateKey) {
+  async execute(dto, distributorId, distributorPrivateKey = null) {
     dto.validate();
 
     // Kiểm tra xem đã có contract pending hoặc approved chưa
@@ -61,27 +61,37 @@ export class CreateContractRequestUseCase {
 
     await this._contractRepository.save(contract);
 
-    // Gọi smart contract để tạo contract trên blockchain
-    try {
-      const blockchainResult = await this._blockchainService.distributorCreateAContract(
-        distributorPrivateKey,
-        pharmacy.user.walletAddress
-      );
+    // Gọi smart contract để tạo contract trên blockchain (nếu có private key)
+    if (distributorPrivateKey) {
+      try {
+        const blockchainResult =
+          await this._blockchainService.distributorCreateAContract(
+            distributorPrivateKey,
+            pharmacy.user.walletAddress
+          );
 
-      contract.setBlockchainTxHash(blockchainResult.transactionHash);
-      contract.setBlockchainStatus(ContractStatus.PENDING);
+        contract.setBlockchainTxHash(blockchainResult.transactionHash);
+        contract.setBlockchainStatus(ContractStatus.PENDING);
+        await this._contractRepository.save(contract);
+      } catch (error) {
+        console.error("Lỗi khi gọi smart contract:", error);
+        // Vẫn lưu contract vào database nhưng không có blockchain tx hash
+        throw new Error(
+          `Lỗi khi tạo contract trên blockchain: ${error.message}`
+        );
+      }
+    } else {
+      // Không có private key → đánh dấu contract chưa sync blockchain
+      contract.setBlockchainStatus(ContractStatus.NOT_CREATED);
       await this._contractRepository.save(contract);
-    } catch (error) {
-      console.error("Lỗi khi gọi smart contract:", error);
-      // Vẫn lưu contract vào database nhưng không có blockchain tx hash
-      throw new Error(`Lỗi khi tạo contract trên blockchain: ${error.message}`);
     }
 
     return {
       contractId: contract.id,
       status: contract.status,
-      blockchainTxHash: contract.blockchainTxHash,
+      blockchainTxHash: contract.blockchainTxHash || null,
       createdAt: contract.createdAt,
+      blockchainStatus: contract.blockchainStatus,
     };
   }
 }

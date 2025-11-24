@@ -763,7 +763,7 @@ export class DistributorController {
     try {
       const dto = (await import("../../application/dto/CreateContractRequestDTO.js")).CreateContractRequestDTO.fromRequest(req);
       const distributorId = req.user?._id?.toString();
-      const distributorPrivateKey = req.body.distributorPrivateKey;
+      const distributorPrivateKey = req.body.distributorPrivateKey || null;
 
       if (!distributorId) {
         return res.status(403).json({
@@ -772,16 +772,13 @@ export class DistributorController {
         });
       }
 
-      if (!distributorPrivateKey) {
-        return res.status(400).json({
-          success: false,
-          message: "Distributor private key là bắt buộc để ký trên blockchain",
-        });
-      }
-
       dto.validate();
 
-      const result = await this._distributorService.createContractRequest(dto, distributorId, distributorPrivateKey);
+      const result = await this._distributorService.createContractRequest(
+        dto,
+        distributorId,
+        distributorPrivateKey
+      );
 
       return res.status(201).json({
         success: true,

@@ -628,8 +628,12 @@ export class DistributorApplicationService {
     };
   }
 
-  async createContractRequest(dto, distributorId, distributorPrivateKey) {
-    return await this._createContractRequestUseCase.execute(dto, distributorId, distributorPrivateKey);
+  async createContractRequest(dto, distributorId, distributorPrivateKey = null) {
+    return await this._createContractRequestUseCase.execute(
+      dto,
+      distributorId,
+      distributorPrivateKey
+    );
   }
 
   async finalizeContractAndMint(dto, distributorId, distributorPrivateKey) {
