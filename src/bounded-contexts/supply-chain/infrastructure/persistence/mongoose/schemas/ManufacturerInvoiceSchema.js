@@ -38,9 +38,15 @@ const DeliveryInfoSchema = new mongoose.Schema({
 
 export const ManufacturerInvoiceSchema = new mongoose.Schema(
   {
+    externalId: {
+      type: String,
+      required: false,
+      unique: true,
+      sparse: true,
+    },
     fromManufacturer: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "PharmaCompany",
       required: true,
     },
     toDistributor: {

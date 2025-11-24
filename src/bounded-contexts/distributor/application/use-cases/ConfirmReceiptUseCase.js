@@ -37,18 +37,31 @@ export class ConfirmReceiptUseCase {
       throw new Error(`Invoice chưa được gửi. Trạng thái hiện tại: ${invoice.status}`);
     }
 
-    // Get batch number from invoice
+    if (!invoice.tokenIds || invoice.tokenIds.length === 0) {
+      throw new Error("Invoice không chứa tokenIds để xác nhận");
+    }
+
+    const nfts = await this._nftRepository.findByTokenIds(invoice.tokenIds);
+    if (nfts.length !== invoice.tokenIds.length) {
+      throw new Error("Danh sách NFT không đầy đủ so với tokenIds của invoice");
+    }
+
+    const unauthorizedNFT = nfts.find(nft => nft.ownerId !== distributorId);
+    if (unauthorizedNFT) {
+      throw new Error(
+        `NFT ${unauthorizedNFT.tokenId} chưa thuộc quyền sở hữu distributor hiện tại`
+      );
+    }
+
+    // Get batch number from NFT/proof
     let batchNumber = null;
-    
-    if (invoice.tokenIds && invoice.tokenIds.length > 0) {
-      const nfts = await this._nftRepository.findByTokenIds(invoice.tokenIds);
-      if (nfts.length > 0 && nfts[0].batchNumber) {
-        batchNumber = nfts[0].batchNumber;
-      } else if (nfts.length > 0 && nfts[0].proofOfProductionId) {
-        const proof = await this._proofOfProductionRepository.findById(nfts[0].proofOfProductionId);
-        if (proof) {
-          batchNumber = proof.batchNumber;
-        }
+    const firstNft = nfts[0];
+    if (firstNft && firstNft.batchNumber) {
+      batchNumber = firstNft.batchNumber;
+    } else if (firstNft && firstNft.proofOfProductionId) {
+      const proof = await this._proofOfProductionRepository.findById(firstNft.proofOfProductionId);
+      if (proof) {
+        batchNumber = proof.batchNumber;
       }
     } else if (invoice.proofOfProductionId) {
       const proof = await this._proofOfProductionRepository.findById(invoice.proofOfProductionId);

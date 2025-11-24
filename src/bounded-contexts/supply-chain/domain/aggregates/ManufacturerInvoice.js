@@ -34,7 +34,9 @@ export class ManufacturerInvoice extends AggregateRoot {
     notes = null,
     status = InvoiceStatus.PENDING,
     chainTxHash = null,
-    tokenIds = []
+    tokenIds = [],
+    externalId = null,
+    batchNumber = null
   ) {
     super(id);
     this._fromManufacturerId = fromManufacturerId;
@@ -56,6 +58,8 @@ export class ManufacturerInvoice extends AggregateRoot {
     this._tokenIds = tokenIds || [];
     this._createdAt = new Date();
     this._updatedAt = new Date();
+    this._externalId = externalId;
+    this._batchNumber = batchNumber;
   }
 
   static create(
@@ -73,7 +77,8 @@ export class ManufacturerInvoice extends AggregateRoot {
     vatRate = null,
     vatAmount = null,
     finalAmount = null,
-    notes = null
+    notes = null,
+    batchNumber = null
   ) {
     const id = crypto.randomUUID();
     const invoice = new ManufacturerInvoice(
@@ -94,7 +99,9 @@ export class ManufacturerInvoice extends AggregateRoot {
       notes,
       InvoiceStatus.PENDING,
       null,
-      tokenIds
+      tokenIds,
+      id,
+      batchNumber
     );
 
     // Emit domain event
@@ -199,6 +206,19 @@ export class ManufacturerInvoice extends AggregateRoot {
 
   get updatedAt() {
     return this._updatedAt;
+  }
+
+  get externalId() {
+    return this._externalId;
+  }
+
+  get batchNumber() {
+    return this._batchNumber;
+  }
+
+  setBatchNumber(batchNumber) {
+    this._batchNumber = batchNumber;
+    this._updatedAt = new Date();
   }
 
   issue() {

@@ -208,7 +208,12 @@ export class ProductionController {
         });
       }
 
-      if (!invoiceId || !transactionHash || !tokenIds) {
+      if (
+        !invoiceId ||
+        !transactionHash ||
+        !Array.isArray(tokenIds) ||
+        tokenIds.length === 0
+      ) {
         return res.status(400).json({
           success: false,
           message: "invoiceId, transactionHash và tokenIds là bắt buộc",
@@ -227,6 +232,9 @@ export class ProductionController {
       }
 
       // Check ownership
+      console.log("[save-transfer] manufacturerId token =", manufacturerId);
+      console.log("[save-transfer] invoice.fromManufacturerId =", invoice.fromManufacturerId);
+      console.log("[save-transfer] invoiceId =", invoice.id);
       if (invoice.fromManufacturerId !== manufacturerId) {
         return res.status(403).json({
           success: false,
@@ -237,9 +245,42 @@ export class ProductionController {
       // Update invoice with transaction hash and mark as sent
       invoice.send(transactionHash);
 
+      const expectedTokens = Array.isArray(invoice.tokenIds)
+        ? invoice.tokenIds.map((tid) => tid.toString())
+        : [];
+      const receivedTokens = tokenIds.map((tid) => tid.toString());
+
+      if (
+        expectedTokens.length !== receivedTokens.length ||
+        expectedTokens.some((tid) => !receivedTokens.includes(tid))
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "tokenIds không khớp với invoice",
+          details: {
+            expectedTokens,
+            receivedTokens,
+          },
+        });
+      }
+
       // Update NFTs with transaction hash
-      const nfts = await this._nftRepository.findByTokenIds(tokenIds);
+      const nfts = await this._nftRepository.findByTokenIds(receivedTokens);
+      if (nfts.length !== receivedTokens.length) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đầy đủ NFT tương ứng tokenIds",
+        });
+      }
+
       for (const nft of nfts) {
+        if (nft.ownerId !== manufacturerId) {
+          return res.status(403).json({
+            success: false,
+            message: `NFT ${nft.tokenId} không thuộc manufacturer hiện tại`,
+          });
+        }
+
         nft.setMintTransaction(transactionHash);
         nft.transfer(invoice.toDistributorId, transactionHash);
         await this._nftRepository.save(nft);

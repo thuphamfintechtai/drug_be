@@ -78,7 +78,8 @@ export class NFTRepository extends INFTRepository {
   async save(nft) {
     const document = NFTMapper.toPersistence(nft);
 
-    const isObjectId = nft.id && nft.id.length === 24 && /^[0-9a-fA-F]{24}$/.test(nft.id);
+    const isObjectId =
+      nft.id && nft.id.length === 24 && /^[0-9a-fA-F]{24}$/.test(nft.id);
 
     if (isObjectId && document._id) {
       const updated = await NFTInfoModel.findByIdAndUpdate(
@@ -90,14 +91,18 @@ export class NFTRepository extends INFTRepository {
         .populate("owner")
         .populate("proofOfProduction");
       return NFTMapper.toDomain(updated);
-    } else {
-      const created = await NFTInfoModel.create(document);
-      const saved = await NFTInfoModel.findById(created._id)
-        .populate("drug")
-        .populate("owner")
-        .populate("proofOfProduction");
-      return NFTMapper.toDomain(saved);
     }
+
+    // Nếu ID domain là UUID, cập nhật theo tokenId để tránh tạo bản ghi mới
+    const updatedByToken = await NFTInfoModel.findOneAndUpdate(
+      { tokenId: document.tokenId },
+      { $set: document },
+      { new: true, runValidators: true, upsert: true }
+    )
+      .populate("drug")
+      .populate("owner")
+      .populate("proofOfProduction");
+    return NFTMapper.toDomain(updatedByToken);
   }
 
   async saveMany(nfts) {

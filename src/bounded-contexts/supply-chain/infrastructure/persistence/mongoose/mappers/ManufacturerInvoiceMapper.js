@@ -78,7 +78,9 @@ export class ManufacturerInvoiceMapper {
       document.notes || null,
       document.status || InvoiceStatus.PENDING,
       document.chainTxHash || null,
-      document.tokenIds || []
+      document.tokenIds || [],
+      document.externalId || null,
+      document.batchNumber || null
     );
   }
 
@@ -105,6 +107,8 @@ export class ManufacturerInvoiceMapper {
       drugId = new mongoose.Types.ObjectId(drugId);
     }
 
+    const isObjectId = aggregate.id && aggregate.id.length === 24 && /^[0-9a-fA-F]{24}$/.test(aggregate.id);
+
     const document = {
       fromManufacturer: fromManufacturerId,
       toDistributor: toDistributorId,
@@ -123,14 +127,18 @@ export class ManufacturerInvoiceMapper {
       status: aggregate.status,
       chainTxHash: aggregate.chainTxHash || null,
       tokenIds: aggregate.tokenIds || [],
-      batchNumber: null, // Will be set from related NFT or ProofOfProduction
+      batchNumber: aggregate.batchNumber || null,
       updatedAt: aggregate.updatedAt || new Date(),
+      externalId: aggregate.externalId || (!isObjectId ? aggregate.id : undefined),
     };
 
     // Only include _id if it's a valid MongoDB ObjectId
-    const isObjectId = aggregate.id && aggregate.id.length === 24 && /^[0-9a-fA-F]{24}$/.test(aggregate.id);
     if (isObjectId) {
       document._id = aggregate.id;
+    }
+
+    if (document.externalId === undefined) {
+      delete document.externalId;
     }
 
     return document;

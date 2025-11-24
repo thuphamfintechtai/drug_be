@@ -5,17 +5,30 @@ import mongoose from "mongoose";
 
 export class ManufacturerInvoiceRepository extends IManufacturerInvoiceRepository {
   async findById(id) {
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return null;
     }
-    
-    const document = await ManufacturerInvoiceModel.findById(id)
-      .populate("fromManufacturer")
-      .populate("toDistributor")
-      .populate("drug")
-      .populate("proofOfProduction")
-      .populate("nftInfo");
+
+    let document = null;
+
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      document = await ManufacturerInvoiceModel.findById(id)
+        .populate("fromManufacturer")
+        .populate("toDistributor")
+        .populate("drug")
+        .populate("proofOfProduction")
+        .populate("nftInfo");
+    }
+
+    if (!document) {
+      document = await ManufacturerInvoiceModel.findOne({ externalId: id })
+        .populate("fromManufacturer")
+        .populate("toDistributor")
+        .populate("drug")
+        .populate("proofOfProduction")
+        .populate("nftInfo");
+    }
+
     return ManufacturerInvoiceMapper.toDomain(document);
   }
 

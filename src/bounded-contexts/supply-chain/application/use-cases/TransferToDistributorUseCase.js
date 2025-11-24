@@ -118,7 +118,8 @@ export class TransferToDistributorUseCase {
       vatRate,
       vatAmount,
       finalAmount,
-      notes
+      notes,
+      batchNumber
     );
 
     invoice.issue(); // Automatically issue the invoice
@@ -128,29 +129,11 @@ export class TransferToDistributorUseCase {
       invoice.setChainTxHash(chainTxHash);
     }
 
-    await this._manufacturerInvoiceRepository.save(invoice);
-
-    // Save batchNumber if provided (batchNumber is not in domain aggregate, save directly to document)
     if (batchNumber) {
-      const { ManufacturerInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
-      const mongoose = await import("mongoose");
-      
-      // Try to update by ID if it's a valid ObjectId, otherwise use invoiceNumber
-      if (mongoose.default.Types.ObjectId.isValid(invoice.id)) {
-        await ManufacturerInvoiceModel.findByIdAndUpdate(
-          invoice.id,
-          { $set: { batchNumber } },
-          { new: true }
-        );
-      } else {
-        // If ID is not ObjectId (e.g., UUID), find by invoiceNumber
-        await ManufacturerInvoiceModel.findOneAndUpdate(
-          { invoiceNumber: invoice.invoiceNumber },
-          { $set: { batchNumber } },
-          { new: true }
-        );
-      }
+      invoice.setBatchNumber(batchNumber);
     }
+
+    const savedInvoice = await this._manufacturerInvoiceRepository.save(invoice);
 
     // Publish domain events
     invoice.domainEvents.forEach(event => {
@@ -158,12 +141,14 @@ export class TransferToDistributorUseCase {
     });
 
     return {
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      status: invoice.status,
-      tokenIds: invoice.tokenIds,
-      quantity: invoice.quantity,
-      createdAt: invoice.createdAt,
+      invoiceId: savedInvoice.id,
+      invoiceNumber: savedInvoice.invoiceNumber,
+      status: savedInvoice.status,
+      tokenIds: savedInvoice.tokenIds,
+      quantity: savedInvoice.quantity,
+      createdAt: savedInvoice.createdAt,
+      chainTxHash: savedInvoice.chainTxHash,
+      batchNumber: savedInvoice.batchNumber,
     };
   }
 }
