@@ -79,16 +79,22 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
     return documents.map(doc => CommercialInvoiceMapper.toDomain(doc));
   }
 
-  async save(invoice) {
+  async save(invoice, options = {}) {
     const document = CommercialInvoiceMapper.toPersistence(invoice);
+    const { session } = options;
 
     const isObjectId = invoice.id && invoice.id.length === 24 && /^[0-9a-fA-F]{24}$/.test(invoice.id);
 
     if (isObjectId && document._id) {
+      const updateOptions = { new: true, runValidators: true };
+      if (session) {
+        updateOptions.session = session;
+      }
+      
       const updated = await CommercialInvoiceModel.findByIdAndUpdate(
         document._id,
         { $set: document },
-        { new: true, runValidators: true }
+        updateOptions
       )
         .populate("fromDistributor")
         .populate("toPharmacy")
@@ -97,8 +103,14 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
         .populate("nftInfo");
       return CommercialInvoiceMapper.toDomain(updated);
     } else {
-      const created = await CommercialInvoiceModel.create(document);
-      const saved = await CommercialInvoiceModel.findById(created._id)
+      let created;
+      if (session) {
+        created = await CommercialInvoiceModel.create([document], { session });
+      } else {
+        created = await CommercialInvoiceModel.create([document]);
+      }
+      const savedDoc = created[0] || created;
+      const saved = await CommercialInvoiceModel.findById(savedDoc._id)
         .populate("fromDistributor")
         .populate("toPharmacy")
         .populate("drug")

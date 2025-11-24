@@ -227,6 +227,175 @@ export const createDistributorRoutes = (distributorController) => {
 
   /**
    * @swagger
+   * /api/distributor/invoices/{invoiceId}/status:
+   *   get:
+   *     summary: Lấy trạng thái đơn hàng
+   *     tags: [Distributor]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: invoiceId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: ID của invoice
+   *     responses:
+   *       200:
+   *         description: Trạng thái đơn hàng
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                       description: ID của invoice
+   *                       example: "89cec1c6-4013-4511-9432-84e29c8c2f6d"
+   *                     invoiceNumber:
+   *                       type: string
+   *                       description: Số hóa đơn
+   *                       example: "INV-2024-001"
+   *                     status:
+   *                       type: string
+   *                       enum: [draft, pending, issued, sent, paid, cancelled]
+   *                       description: Trạng thái đơn hàng
+   *       404:
+   *         description: Không tìm thấy invoice
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Không tìm thấy invoice"
+   *       403:
+   *         description: Không có quyền truy cập
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Bạn không có quyền xem invoice này"
+   *       500:
+   *         description: Lỗi server
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Lỗi server khi lấy invoice status"
+   *                 error:
+   *                   type: string
+   */
+  router.get("/invoices/:invoiceId/status", (req, res) =>
+    distributorController.getInvoiceStatus(req, res)
+  );
+
+  /**
+   * @swagger
+   * /api/distributor/invoices/{invoiceId}/status:
+   *   put:
+   *     summary: Cập nhật trạng thái đơn hàng
+   *     tags: [Distributor]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: invoiceId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: ID của invoice
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - status
+   *             properties:
+   *               status:
+   *                 type: string
+   *                 enum: [draft, pending, issued, sent, confirmed, delivered, paid, cancelled]
+   *                 description: Trạng thái mới của đơn hàng
+   *                 example: "confirmed"
+   *     responses:
+   *       200:
+   *         description: Cập nhật trạng thái thành công
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 message:
+   *                   type: string
+   *                   example: "Cập nhật trạng thái invoice thành công"
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     id:
+   *                       type: string
+   *                       description: ID của invoice
+   *                     invoiceNumber:
+   *                       type: string
+   *                       description: Số hóa đơn
+   *                     status:
+   *                       type: string
+   *                       description: Trạng thái mới
+   *                     previousStatus:
+   *                       type: string
+   *                       description: Trạng thái cũ
+   *       400:
+   *         description: Trạng thái không hợp lệ hoặc không thể chuyển đổi
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Không thể chuyển từ trạng thái sent sang paid"
+   *       404:
+   *         description: Không tìm thấy invoice
+   *       403:
+   *         description: Không có quyền truy cập
+   *       500:
+   *         description: Lỗi server
+   */
+  router.put("/invoices/:invoiceId/status", (req, res) =>
+    distributorController.updateInvoiceStatus(req, res)
+  );
+
+  /**
+   * @swagger
    * /api/distributor/invoices/confirm-receipt:
    *   post:
    *     summary: Xác nhận nhận hàng từ nhà sản xuất

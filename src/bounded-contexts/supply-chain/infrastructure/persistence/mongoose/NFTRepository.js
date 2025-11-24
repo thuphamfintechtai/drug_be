@@ -75,17 +75,23 @@ export class NFTRepository extends INFTRepository {
     return documents.map(doc => NFTMapper.toDomain(doc));
   }
 
-  async save(nft) {
+  async save(nft, options = {}) {
     const document = NFTMapper.toPersistence(nft);
+    const { session } = options;
 
     const isObjectId =
       nft.id && nft.id.length === 24 && /^[0-9a-fA-F]{24}$/.test(nft.id);
 
     if (isObjectId && document._id) {
+      const updateOptions = { new: true, runValidators: true };
+      if (session) {
+        updateOptions.session = session;
+      }
+      
       const updated = await NFTInfoModel.findByIdAndUpdate(
         document._id,
         { $set: document },
-        { new: true, runValidators: true }
+        updateOptions
       )
         .populate("drug")
         .populate("owner")
@@ -94,10 +100,15 @@ export class NFTRepository extends INFTRepository {
     }
 
     // Nếu ID domain là UUID, cập nhật theo tokenId để tránh tạo bản ghi mới
+    const updateOptions = { new: true, runValidators: true, upsert: true };
+    if (session) {
+      updateOptions.session = session;
+    }
+    
     const updatedByToken = await NFTInfoModel.findOneAndUpdate(
       { tokenId: document.tokenId },
       { $set: document },
-      { new: true, runValidators: true, upsert: true }
+      updateOptions
     )
       .populate("drug")
       .populate("owner")
