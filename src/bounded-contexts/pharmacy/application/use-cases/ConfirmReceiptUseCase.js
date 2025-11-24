@@ -64,6 +64,18 @@ export class ConfirmReceiptUseCase {
     
     if (existingProofs.length > 0) {
       proofOfPharmacy = existingProofs[0];
+      
+      // Prevent double-confirm: if already confirmed, return existing state
+      if (proofOfPharmacy.status === "confirmed") {
+        return {
+          proofOfPharmacyId: proofOfPharmacy.id,
+          invoiceId: invoice.id,
+          status: proofOfPharmacy.status,
+          batchNumber: proofOfPharmacy.batchNumber,
+          message: "Receipt đã được xác nhận trước đó",
+        };
+      }
+      
       proofOfPharmacy.confirmReceipt();
       
       if (dto.receivedBy) {

@@ -31,6 +31,17 @@ export class TransferToPharmacyUseCase {
     finalAmount = null,
     notes = null
   ) {
+    // Validate tokenIds is array and not empty
+    if (!Array.isArray(tokenIds) || tokenIds.length === 0) {
+      throw new Error("tokenIds phải là array không rỗng");
+    }
+
+    // Check for duplicate tokenIds
+    const uniqueTokenIds = [...new Set(tokenIds)];
+    if (uniqueTokenIds.length !== tokenIds.length) {
+      throw new Error("tokenIds không được chứa giá trị trùng lặp");
+    }
+
     // Check drug exists
     const drug = await this._drugInfoRepository.findById(drugId);
     if (!drug) {
@@ -62,6 +73,11 @@ export class TransferToPharmacyUseCase {
 
     // Calculate quantity if not provided
     const calculatedQuantity = quantity || nfts.length;
+
+    // Validate quantity matches tokenIds length if provided
+    if (quantity !== null && quantity !== undefined && quantity !== nfts.length) {
+      throw new Error(`quantity (${quantity}) phải bằng số lượng tokenIds (${nfts.length})`);
+    }
 
     // Get nftInfoId from first NFT
     const nftInfoId = nfts[0]?.id || null;

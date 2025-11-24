@@ -84,6 +84,92 @@ export class DistributorController {
     }
   }
 
+  async getInvoiceStatus(req, res) {
+    try {
+      const { invoiceId } = req.params;
+      const distributorId = req.user?._id?.toString();
+
+      if (!distributorId) {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ có distributor mới có thể xem invoice status",
+        });
+      }
+
+      const invoiceStatus = await this._distributorService.getInvoiceStatus(distributorId, invoiceId);
+
+      return res.status(200).json({
+        success: true,
+        data: invoiceStatus,
+      });
+    } catch (error) {
+      if (error.message && (error.message.includes("không tìm thấy") || error.message.includes("không có quyền"))) {
+        return res.status(error.message.includes("không tìm thấy") ? 404 : 403).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      console.error("Lỗi khi lấy invoice status:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi lấy invoice status",
+        error: error.message,
+      });
+    }
+  }
+
+  async updateInvoiceStatus(req, res) {
+    try {
+      const { invoiceId } = req.params;
+      const { status } = req.body;
+      const distributorId = req.user?._id?.toString();
+
+      if (!distributorId) {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ có distributor mới có thể cập nhật invoice status",
+        });
+      }
+
+      if (!status) {
+        return res.status(400).json({
+          success: false,
+          message: "Trạng thái (status) là bắt buộc",
+        });
+      }
+
+      const result = await this._distributorService.updateInvoiceStatus(distributorId, invoiceId, status);
+
+      return res.status(200).json({
+        success: true,
+        message: "Cập nhật trạng thái invoice thành công",
+        data: result,
+      });
+    } catch (error) {
+      if (error.message && (error.message.includes("không tìm thấy") || error.message.includes("không có quyền"))) {
+        return res.status(error.message.includes("không tìm thấy") ? 404 : 403).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      if (error.message && (error.message.includes("không hợp lệ") || error.message.includes("Không thể chuyển"))) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      console.error("Lỗi khi cập nhật invoice status:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi cập nhật invoice status",
+        error: error.message,
+      });
+    }
+  }
+
   async confirmReceipt(req, res) {
     try {
       const dto = ConfirmReceiptDTO.fromRequest(req);

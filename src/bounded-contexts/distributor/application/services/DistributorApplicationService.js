@@ -102,6 +102,14 @@ export class DistributorApplicationService {
     transactionHash,
     tokenIds
   ) {
+    // Validate transactionHash format (basic check for Ethereum hash)
+    if (!transactionHash || typeof transactionHash !== 'string') {
+      throw new Error("transactionHash không hợp lệ");
+    }
+    if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash)) {
+      throw new Error("transactionHash phải có định dạng Ethereum hash (0x + 64 hex chars)");
+    }
+
     // Find invoice
     const invoice = await this._commercialInvoiceRepository.findById(invoiceId);
     if (!invoice) {
@@ -113,25 +121,88 @@ export class DistributorApplicationService {
       throw new Error("Bạn không có quyền cập nhật invoice này");
     }
 
-    // Update invoice with transaction hash
-    invoice.setChainTxHash(transactionHash);
-    invoice.markAsSent(transactionHash);
-
-    // Update NFTs with transaction hash and transfer to pharmacy
-    const nfts = await this._nftRepository.findByTokenIds(tokenIds);
-    for (const nft of nfts) {
-      nft.setMintTransaction(transactionHash);
-      nft.transfer(invoice.toPharmacyId, transactionHash);
-      await this._nftRepository.save(nft);
+    // CRITICAL: Check invoice status must be "issued"
+    if (invoice.status !== "issued") {
+      throw new Error(`Invoice phải ở trạng thái "issued" để lưu transaction. Trạng thái hiện tại: ${invoice.status}`);
     }
 
-    await this._commercialInvoiceRepository.save(invoice);
+    // CRITICAL: Check if transactionHash already exists (idempotency)
+    if (invoice.chainTxHash === transactionHash) {
+      // Already processed, return current state
+      return {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        status: invoice.status,
+        chainTxHash: invoice.chainTxHash,
+      };
+    }
+
+    // CRITICAL: Validate tokenIds match invoice.tokenIds exactly
+    const invoiceTokenIds = invoice.tokenIds || [];
+    const requestTokenIds = Array.isArray(tokenIds) ? tokenIds : [];
+    
+    if (invoiceTokenIds.length !== requestTokenIds.length) {
+      throw new Error(`tokenIds không khớp với invoice. Invoice có ${invoiceTokenIds.length} tokenIds, request có ${requestTokenIds.length}`);
+    }
+
+    const invoiceTokenIdsSet = new Set(invoiceTokenIds.map(id => id.toString()));
+    const requestTokenIdsSet = new Set(requestTokenIds.map(id => id.toString()));
+    
+    if (invoiceTokenIdsSet.size !== requestTokenIdsSet.size) {
+      throw new Error("tokenIds có giá trị trùng lặp hoặc không khớp với invoice");
+    }
+
+    for (const tokenId of requestTokenIds) {
+      if (!invoiceTokenIdsSet.has(tokenId.toString())) {
+        throw new Error(`tokenId ${tokenId} không tồn tại trong invoice`);
+      }
+    }
+
+    // Get NFTs and validate they still belong to distributor
+    const nfts = await this._nftRepository.findByTokenIds(requestTokenIds);
+    if (nfts.length !== requestTokenIds.length) {
+      throw new Error("Không tìm thấy đầy đủ NFT tương ứng với tokenIds");
+    }
+
+    // Validate NFTs still belong to distributor before transfer
+    for (const nft of nfts) {
+      if (nft.ownerId !== distributorId) {
+        throw new Error(`NFT với tokenId ${nft.tokenId} không còn thuộc về distributor này. Owner hiện tại: ${nft.ownerId}`);
+      }
+    }
+
+    // Use database transaction to ensure atomicity
+    const mongoose = await import("mongoose");
+    const session = await mongoose.default.startSession();
+    
+    try {
+      await session.withTransaction(async () => {
+        // Update invoice with transaction hash
+        invoice.setChainTxHash(transactionHash);
+        invoice.markAsSent(transactionHash);
+        await this._commercialInvoiceRepository.save(invoice, { session });
+
+        // Update NFTs with transaction hash and transfer to pharmacy
+        await Promise.all(
+          nfts.map(async (nft) => {
+            nft.setMintTransaction(transactionHash);
+            nft.transfer(invoice.toPharmacyId, transactionHash);
+            await this._nftRepository.save(nft, { session });
+          })
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
+
+    // Reload invoice to get updated state
+    const updatedInvoice = await this._commercialInvoiceRepository.findById(invoiceId);
 
     return {
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      status: invoice.status,
-      chainTxHash: invoice.chainTxHash,
+      invoiceId: updatedInvoice.id,
+      invoiceNumber: updatedInvoice.invoiceNumber,
+      status: updatedInvoice.status,
+      chainTxHash: updatedInvoice.chainTxHash,
     };
   }
 
