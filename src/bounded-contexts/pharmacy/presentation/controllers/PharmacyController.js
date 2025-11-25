@@ -527,7 +527,6 @@ export class PharmacyController {
     try {
       const dto = (await import("../../application/dto/ConfirmContractDTO.js")).ConfirmContractDTO.fromRequest(req);
       const pharmacyId = req.user?._id?.toString();
-      const pharmacyPrivateKey = req.body.pharmacyPrivateKey;
 
       if (!pharmacyId) {
         return res.status(403).json({
@@ -536,16 +535,11 @@ export class PharmacyController {
         });
       }
 
-      if (!pharmacyPrivateKey) {
-        return res.status(400).json({
-          success: false,
-          message: "Pharmacy private key là bắt buộc để ký trên blockchain",
-        });
-      }
-
       dto.validate();
 
-      const result = await this._pharmacyService.confirmContract(dto, pharmacyId, pharmacyPrivateKey);
+      // Pass the DTO and let the service/use-case decide whether a private key
+      // or a signature payload is provided.
+      const result = await this._pharmacyService.confirmContract(dto, pharmacyId, dto.pharmacyPrivateKey);
 
       return res.status(200).json({
         success: true,
@@ -571,19 +565,47 @@ export class PharmacyController {
 
   async getContracts(req, res) {
     try {
-      const pharmacyId = req.user?._id?.toString();
+      // Bước 1: Lấy userId từ JWT (đã được giải mã trong middleware)
+      const userId = req.user?._id?.toString();
 
-      if (!pharmacyId) {
+      if (!userId) {
         return res.status(403).json({
           success: false,
           message: "Chỉ có pharmacy mới có thể xem contracts",
         });
       }
 
+      // Bước 2: Query User để lấy Pharmacy ID
+      const { UserModel } = await import("../../../identity-access/infrastructure/persistence/mongoose/schemas/UserSchema.js");
+      const user = await UserModel.findById(userId);
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy user",
+        });
+      }
+
+      // Bước 3: Query Pharmacy để lấy Pharmacy entity ID
+      const { PharmacyModel, DistributorModel } = await import(
+        "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+      );
+      const pharmacy = await PharmacyModel.findOne({ user: userId });
+
+      if (!pharmacy) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy pharmacy entity cho user này",
+        });
+      }
+
+      const pharmacyId = pharmacy._id.toString();
+
       const filters = {
         status: req.query.status,
       };
 
+      // Bước 4: Query DistributorPharmacyContract với Pharmacy ID
       const contracts = await this._pharmacyService.getContracts(pharmacyId, filters);
 
       return res.status(200).json({
@@ -617,22 +639,83 @@ export class PharmacyController {
   async getContractDetail(req, res) {
     try {
       const { contractId } = req.params;
-      const pharmacyId = req.user?._id?.toString();
+      
+      // Bước 1: Lấy userId từ JWT (đã được giải mã trong middleware)
+      const userId = req.user?._id?.toString();
 
-      if (!pharmacyId) {
+      if (!userId) {
         return res.status(403).json({
           success: false,
           message: "Chỉ có pharmacy mới có thể xem contract detail",
         });
       }
 
+      // Bước 2: Query User để kiểm tra user tồn tại
+      const { UserModel } = await import("../../../identity-access/infrastructure/persistence/mongoose/schemas/UserSchema.js");
+      const user = await UserModel.findById(userId);
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy user",
+        });
+      }
+
+      // Bước 3: Query Pharmacy để lấy Pharmacy entity ID
+      const { PharmacyModel, DistributorModel } = await import(
+        "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+      );
+      const pharmacy = await PharmacyModel.findOne({ user: userId });
+
+      if (!pharmacy) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy pharmacy entity cho user này",
+        });
+      }
+
+      const pharmacyId = pharmacy._id.toString();
+
+      // Bước 4: Query DistributorPharmacyContract với Pharmacy ID
       const contract = await this._pharmacyService.getContractDetail(pharmacyId, contractId);
+
+      // Try to fetch distributor and pharmacy wallet addresses (if available)
+
+      let distributorWalletAddress = null;
+      let pharmacyWalletAddress = pharmacy.walletAddress || null;
+
+      try {
+        if (contract.distributorId) {
+          // Contract lưu distributorId = userId (từ JWT) -> thử cả _id lẫn user
+          let distributorEntity = await DistributorModel.findById(contract.distributorId).lean();
+          if (!distributorEntity) {
+            distributorEntity = await DistributorModel.findOne({ user: contract.distributorId }).lean();
+          }
+
+          if (distributorEntity && distributorEntity.walletAddress) {
+            distributorWalletAddress = distributorEntity.walletAddress;
+          }
+        }
+
+        // Nếu chưa có wallet từ entity theo user, thử theo contract.pharmacyId (entity id)
+        if (!pharmacyWalletAddress && contract.pharmacyId) {
+          const pharmacyEntity = await PharmacyModel.findById(contract.pharmacyId).lean();
+          if (pharmacyEntity && pharmacyEntity.walletAddress) {
+            pharmacyWalletAddress = pharmacyEntity.walletAddress;
+          }
+        }
+      } catch (err) {
+        // ignore lookup errors and continue returning available contract data
+        console.warn("Could not fetch distributor/pharmacy wallet addresses:", err.message);
+      }
 
       return res.status(200).json({
         success: true,
         data: {
           id: contract.id,
           distributorId: contract.distributorId,
+          distributorWalletAddress,
+          pharmacyWalletAddress,
           contractFileUrl: contract.contractFileUrl,
           contractFileName: contract.contractFileName,
           status: contract.status,

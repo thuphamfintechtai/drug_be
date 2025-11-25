@@ -26,10 +26,30 @@ export class DistributorPharmacyContractRepository extends IDistributorPharmacyC
       return null;
     }
     
+    // Query document gốc trước để lấy raw ObjectId (fallback nếu populate fail)
+    const rawDocument = await DistributorPharmacyContractModel.findById(contractId).lean();
+    if (!rawDocument) {
+      return null;
+    }
+    
+    // Query document với populate
     const document = await DistributorPharmacyContractModel.findById(contractId)
-      .populate("distributor", "name licenseNo taxCode")
-      .populate("pharmacy", "name licenseNo taxCode");
-    return DistributorPharmacyContractMapper.toDomain(document);
+      .populate("distributor", "_id name licenseNo taxCode")
+      .populate("pharmacy", "_id name licenseNo taxCode");
+    
+    // Convert sang plain object
+    const docObj = document ? (document.toObject ? document.toObject() : { ...document }) : rawDocument;
+    
+    // Nếu populate fail (distributor/pharmacy là null), dùng raw ObjectId
+    if (!docObj.distributor && rawDocument.distributor) {
+      docObj.distributor = rawDocument.distributor;
+    }
+    
+    if (!docObj.pharmacy && rawDocument.pharmacy) {
+      docObj.pharmacy = rawDocument.pharmacy;
+    }
+    
+    return DistributorPharmacyContractMapper.toDomain(docObj);
   }
 
   async findByDistributorAndPharmacy(distributorId, pharmacyId) {
@@ -37,8 +57,8 @@ export class DistributorPharmacyContractRepository extends IDistributorPharmacyC
       distributor: distributorId,
       pharmacy: pharmacyId,
     })
-      .populate("distributor", "name licenseNo taxCode")
-      .populate("pharmacy", "name licenseNo taxCode")
+      .populate("distributor", "_id name licenseNo taxCode")
+      .populate("pharmacy", "_id name licenseNo taxCode")
       .sort({ createdAt: -1 });
     return DistributorPharmacyContractMapper.toDomain(document);
   }
@@ -51,8 +71,8 @@ export class DistributorPharmacyContractRepository extends IDistributorPharmacyC
     }
 
     const documents = await DistributorPharmacyContractModel.find(query)
-      .populate("distributor", "name licenseNo taxCode")
-      .populate("pharmacy", "name licenseNo taxCode")
+      .populate("distributor", "_id name licenseNo taxCode")
+      .populate("pharmacy", "_id name licenseNo taxCode")
       .sort({ createdAt: -1 });
 
     return documents.map(doc => DistributorPharmacyContractMapper.toDomain(doc));
@@ -66,8 +86,8 @@ export class DistributorPharmacyContractRepository extends IDistributorPharmacyC
     }
 
     const documents = await DistributorPharmacyContractModel.find(query)
-      .populate("distributor", "name licenseNo taxCode")
-      .populate("pharmacy", "name licenseNo taxCode")
+      .populate("distributor", "_id name licenseNo taxCode")
+      .populate("pharmacy", "_id name licenseNo taxCode")
       .sort({ createdAt: -1 });
 
     return documents.map(doc => DistributorPharmacyContractMapper.toDomain(doc));

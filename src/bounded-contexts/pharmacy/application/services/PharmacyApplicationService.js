@@ -545,7 +545,11 @@ export class PharmacyApplicationService {
       throw new Error("Không tìm thấy contract");
     }
 
-    if (contract.pharmacyId !== pharmacyId) {
+    // So sánh an toàn: convert cả hai về string để tránh vấn đề ObjectId vs string
+    const contractPharmacyId = contract.pharmacyId?.toString() || contract.pharmacyId;
+    const requestedPharmacyId = pharmacyId?.toString() || pharmacyId;
+
+    if (contractPharmacyId !== requestedPharmacyId) {
       throw new Error("Bạn không có quyền xem contract này");
     }
 
