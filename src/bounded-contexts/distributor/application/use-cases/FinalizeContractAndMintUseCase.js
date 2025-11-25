@@ -31,33 +31,59 @@ export class FinalizeContractAndMintUseCase {
       throw new Error(`Không thể finalize contract với trạng thái ${contract.status}. Phải là APPROVED`);
     }
 
-    // Gọi smart contract để distributor finalize và mint NFT
-    try {
-      const blockchainResult = await this._blockchainService.distributorFinalizeAndMint(
-        distributorPrivateKey,
-        dto.pharmacyAddress
-      );
+    // Nếu có private key => gọi blockchain
+    if (distributorPrivateKey) {
+      try {
+        const blockchainResult =
+          await this._blockchainService.distributorFinalizeAndMint(
+            distributorPrivateKey,
+            dto.pharmacyAddress
+          );
 
-      if (!blockchainResult.tokenId) {
-        throw new Error("Không nhận được tokenId từ blockchain");
+        if (!blockchainResult.tokenId) {
+          throw new Error("Không nhận được tokenId từ blockchain");
+        }
+
+        // Cập nhật contract trong database
+        contract.finalizeByDistributor(
+          blockchainResult.tokenId,
+          blockchainResult.transactionHash
+        );
+        await this._contractRepository.save(contract);
+
+        return {
+          contractId: contract.id,
+          status: contract.status,
+          tokenId: contract.tokenId,
+          blockchainTxHash: contract.blockchainTxHash,
+          distributorSignedAt: contract.distributorSignedAt,
+          message: "Contract đã được ký và NFT đã được mint thành công.",
+        };
+      } catch (error) {
+        console.error("Lỗi khi gọi smart contract:", error);
+        throw new Error(
+          `Lỗi khi finalize contract và mint NFT trên blockchain: ${error.message}`
+        );
       }
-
-      // Cập nhật contract trong database
-      contract.finalizeByDistributor(blockchainResult.tokenId, blockchainResult.transactionHash);
-      await this._contractRepository.save(contract);
-
-      return {
-        contractId: contract.id,
-        status: contract.status,
-        tokenId: contract.tokenId,
-        blockchainTxHash: contract.blockchainTxHash,
-        distributorSignedAt: contract.distributorSignedAt,
-        message: "Contract đã được ký và NFT đã được mint thành công.",
-      };
-    } catch (error) {
-      console.error("Lỗi khi gọi smart contract:", error);
-      throw new Error(`Lỗi khi finalize contract và mint NFT trên blockchain: ${error.message}`);
     }
+
+    // Không có private key => chấp nhận dữ liệu off-chain (tokenId/transactionHash tùy chọn)
+    // Cho phép frontend truyền tokenId/transactionHash nếu đã mint ở nơi khác, nếu không có thì vẫn finalize nhưng token sẽ null.
+    const tokenId = dto.tokenId ?? null;
+    const transactionHash = dto.transactionHash ?? null;
+
+    contract.finalizeByDistributor(tokenId, transactionHash);
+    await this._contractRepository.save(contract);
+
+    return {
+      contractId: contract.id,
+      status: contract.status,
+      tokenId: contract.tokenId,
+      blockchainTxHash: contract.blockchainTxHash,
+      distributorSignedAt: contract.distributorSignedAt,
+      message:
+        "Contract đã được ký (off-chain). Vui lòng cập nhật token/transaction nếu cần.",
+    };
   }
 }
 
