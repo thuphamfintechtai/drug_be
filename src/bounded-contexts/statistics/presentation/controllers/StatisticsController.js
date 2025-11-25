@@ -5,8 +5,16 @@ export class StatisticsController {
 
   async getManufacturerDashboard(req, res) {
     try {
-      const userId = req.user?.id || req.user?._id;
-      const data = await this._statisticsService.getDashboard(userId, "pharma_company");
+      const manufacturerId = req.user?.pharmaCompanyId || req.user?.pharmaCompany?._id?.toString();
+      
+      if (!manufacturerId) {
+        return res.status(403).json({
+          success: false,
+          message: "Không tìm thấy thông tin nhà sản xuất",
+        });
+      }
+
+      const data = await this._statisticsService.getDashboard(manufacturerId, "pharma_company");
 
       return res.status(200).json({
         success: true,
