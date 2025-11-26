@@ -25,7 +25,7 @@ export const ProofOfDistributionSchema = new mongoose.Schema(
   {
     fromManufacturer: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "PharmaCompany",
       required: true,
     },
     toDistributor: {

@@ -6,6 +6,13 @@ export class DistributorController {
     this._distributorService = distributorService;
   }
 
+  async _loadProofOfPharmacyModel() {
+    const { ProofOfPharmacyModel } = await import(
+      "../../../pharmacy/infrastructure/persistence/mongoose/schemas/ProofOfPharmacySchema.js"
+    );
+    return ProofOfPharmacyModel;
+  }
+
   async getInvoicesFromManufacturer(req, res) {
     try {
       const distributorId = req.user?._id?.toString();
@@ -340,6 +347,20 @@ export class DistributorController {
 
       const distributions = await this._distributorService.getDistributionHistory(distributorId, filters);
 
+      // Kiểm tra xem mỗi distribution có tồn tại trong ProofOfPharmacy không
+      const ProofOfPharmacyModel = await this._loadProofOfPharmacyModel();
+      const distributionIds = distributions.map(dist => dist.id);
+      
+      // Lấy tất cả ProofOfPharmacy có proofOfDistribution trong danh sách distributionIds
+      const proofOfPharmacies = await ProofOfPharmacyModel.find({
+        proofOfDistribution: { $in: distributionIds }
+      }).select("proofOfDistribution");
+
+      // Tạo Set để tra cứu nhanh
+      const transferredDistributionIds = new Set(
+        proofOfPharmacies.map(pop => pop.proofOfDistribution?.toString()).filter(Boolean)
+      );
+
       return res.status(200).json({
         success: true,
         data: distributions.map(dist => ({
@@ -353,6 +374,7 @@ export class DistributorController {
           tokenIds: dist.tokenIds,
           chainTxHash: dist.chainTxHash,
           createdAt: dist.createdAt,
+          transferToPharmacy: transferredDistributionIds.has(dist.id),
         })),
         count: distributions.length,
       });

@@ -183,24 +183,30 @@ export class DistributorApplicationService {
       }
     }
 
-    // Get NFTs and validate they still belong to distributor
+    // Get NFTs and validate
     const nfts = await this._nftRepository.findByTokenIds(requestTokenIds);
     if (nfts.length !== requestTokenIds.length) {
       throw new Error("Không tìm thấy đầy đủ NFT tương ứng với tokenIds");
     }
 
-    // Validate NFTs still belong to distributor before transfer
     // Normalize IDs for comparison
     const normalizedDistributorIdForNFT = distributorId ? String(distributorId).trim() : null;
+    const normalizedPharmacyId = invoice.toPharmacyId ? String(invoice.toPharmacyId).trim() : null;
     
+    // Check NFT ownership: NFT có thể đã được transfer trên blockchain trước đó
+    // Nếu NFT đã thuộc về pharmacy, chỉ cần update transaction hash
+    // Nếu NFT vẫn thuộc về distributor, thì transfer
     for (const nft of nfts) {
       const normalizedNftOwnerId = nft.ownerId ? String(nft.ownerId).trim() : null;
       
-      if (normalizedNftOwnerId !== normalizedDistributorIdForNFT) {
+      // NFT phải thuộc về distributor (chưa transfer) hoặc pharmacy (đã transfer trên blockchain)
+      if (normalizedNftOwnerId !== normalizedDistributorIdForNFT && 
+          normalizedNftOwnerId !== normalizedPharmacyId) {
         throw new Error(
-          `NFT với tokenId ${nft.tokenId} không còn thuộc về distributor này. ` +
+          `NFT với tokenId ${nft.tokenId} không thuộc về distributor hoặc pharmacy trong invoice. ` +
           `Owner hiện tại: ${normalizedNftOwnerId || 'null'}, ` +
-          `Distributor ID: ${normalizedDistributorIdForNFT || 'null'}`
+          `Distributor ID: ${normalizedDistributorIdForNFT || 'null'}, ` +
+          `Pharmacy ID: ${normalizedPharmacyId || 'null'}`
         );
       }
     }
@@ -216,11 +222,26 @@ export class DistributorApplicationService {
         invoice.markAsSent(transactionHash);
         await this._commercialInvoiceRepository.save(invoice, { session });
 
-        // Update NFTs with transaction hash and transfer to pharmacy
+        // Update NFTs with transaction hash
+        // If NFT already belongs to pharmacy (transferred on blockchain), just update transaction hash
+        // If NFT still belongs to distributor, transfer it
         await Promise.all(
           nfts.map(async (nft) => {
-            nft.setMintTransaction(transactionHash);
-            nft.transfer(invoice.toPharmacyId, transactionHash);
+            const nftOwnerId = nft.ownerId ? String(nft.ownerId).trim() : null;
+            const shouldTransfer = nftOwnerId === normalizedDistributorIdForNFT;
+            
+            // Set transaction hash if not already set (for NFTs already transferred on blockchain)
+            // or always set for new transfers
+            if (!nft.chainTxHash || shouldTransfer) {
+              nft.setMintTransaction(transactionHash);
+            }
+            
+            // Only transfer if NFT still belongs to distributor
+            if (shouldTransfer) {
+              nft.transfer(invoice.toPharmacyId, transactionHash);
+            }
+            // If NFT already transferred on blockchain, no need to transfer again
+            
             await this._nftRepository.save(nft, { session });
           })
         );

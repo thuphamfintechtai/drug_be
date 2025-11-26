@@ -11,8 +11,8 @@ export class ProofOfDistributionRepository extends IProofOfDistributionRepositor
     }
     
     const document = await ProofOfDistributionModel.findById(id)
-      .populate("fromManufacturer")
-      .populate("toDistributor")
+      .populate("fromManufacturer", "name licenseNo taxCode contactEmail contactPhone address country")
+      .populate("toDistributor", "username email fullName")
       .populate("manufacturerInvoice")
       .populate("proofOfProduction")
       .populate("nftInfo");
@@ -31,8 +31,8 @@ export class ProofOfDistributionRepository extends IProofOfDistributionRepositor
     }
 
     const documents = await ProofOfDistributionModel.find(query)
-      .populate("fromManufacturer")
-      .populate("toDistributor")
+      .populate("fromManufacturer", "name licenseNo taxCode contactEmail contactPhone address country")
+      .populate("toDistributor", "username email fullName")
       .populate("manufacturerInvoice")
       .populate("proofOfProduction")
       .populate("nftInfo")
@@ -53,8 +53,8 @@ export class ProofOfDistributionRepository extends IProofOfDistributionRepositor
     }
 
     const documents = await ProofOfDistributionModel.find(query)
-      .populate("fromDistributor")
-      .populate("toDistributor")
+      .populate("fromManufacturer", "name licenseNo taxCode contactEmail contactPhone address country")
+      .populate("toDistributor", "username email fullName")
       .populate("manufacturerInvoice")
       .populate("proofOfProduction")
       .populate("nftInfo")
@@ -65,8 +65,8 @@ export class ProofOfDistributionRepository extends IProofOfDistributionRepositor
 
   async findByManufacturerInvoice(invoiceId) {
     const documents = await ProofOfDistributionModel.find({ manufacturerInvoice: invoiceId })
-      .populate("fromManufacturer")
-      .populate("toDistributor")
+      .populate("fromManufacturer", "name licenseNo taxCode contactEmail contactPhone address country")
+      .populate("toDistributor", "username email fullName")
       .populate("manufacturerInvoice")
       .populate("proofOfProduction")
       .populate("nftInfo")
@@ -85,8 +85,8 @@ export class ProofOfDistributionRepository extends IProofOfDistributionRepositor
         { $set: document },
         { new: true, runValidators: true }
       )
-        .populate("fromManufacturer")
-        .populate("toDistributor")
+        .populate("fromManufacturer", "name licenseNo taxCode contactEmail contactPhone address country")
+        .populate("toDistributor", "username email fullName")
         .populate("manufacturerInvoice")
         .populate("proofOfProduction")
         .populate("nftInfo");
@@ -94,8 +94,8 @@ export class ProofOfDistributionRepository extends IProofOfDistributionRepositor
     } else {
       const created = await ProofOfDistributionModel.create(document);
       const saved = await ProofOfDistributionModel.findById(created._id)
-        .populate("fromManufacturer")
-        .populate("toDistributor")
+        .populate("fromManufacturer", "name licenseNo taxCode contactEmail contactPhone address country")
+        .populate("toDistributor", "username email fullName")
         .populate("manufacturerInvoice")
         .populate("proofOfProduction")
         .populate("nftInfo");

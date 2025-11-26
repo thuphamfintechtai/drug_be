@@ -23,16 +23,32 @@ export class ProofOfDistributionMapper {
       return null;
     };
 
-    const manufacturerInfo = document.fromManufacturer
+    // Kiểm tra xem fromManufacturer có được populate không (PharmaCompany có properties như name, licenseNo, contactEmail)
+    const isPopulatedManufacturer = document.fromManufacturer && 
+      typeof document.fromManufacturer === "object" && 
+      document.fromManufacturer._id &&
+      (document.fromManufacturer.name || document.fromManufacturer.licenseNo || document.fromManufacturer.contactEmail);
+
+    const manufacturerInfo = isPopulatedManufacturer
       ? {
           id: extractId(document.fromManufacturer),
-          name:
-            document.fromManufacturer.fullName ||
-            document.fromManufacturer.username ||
-            document.fromManufacturer.email ||
-            null,
-          email: document.fromManufacturer.email || null,
+          name: document.fromManufacturer.name || null,
+          email: document.fromManufacturer.contactEmail || null,
+          licenseNo: document.fromManufacturer.licenseNo || null,
+          taxCode: document.fromManufacturer.taxCode || null,
+          address: document.fromManufacturer.address || null,
+          country: document.fromManufacturer.country || null,
+          contactPhone: document.fromManufacturer.contactPhone || null,
         }
+      : null;
+
+    // Lấy manufacturerId - nếu đã populate thì lấy từ _id, nếu không thì lấy từ giá trị gốc
+    const manufacturerId = document.fromManufacturer 
+      ? (isPopulatedManufacturer 
+          ? extractId(document.fromManufacturer) 
+          : (typeof document.fromManufacturer === "string" 
+              ? document.fromManufacturer 
+              : extractId(document.fromManufacturer)))
       : null;
 
     const tokenIds =
@@ -41,7 +57,7 @@ export class ProofOfDistributionMapper {
 
     return new ProofOfDistribution(
       document._id.toString(),
-      extractId(document.fromManufacturer),
+      manufacturerId,
       extractId(document.toDistributor),
       extractId(document.manufacturerInvoice),
       extractId(document.proofOfProduction),
