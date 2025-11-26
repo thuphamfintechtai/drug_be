@@ -11,13 +11,32 @@ export class CommercialInvoiceMapper {
       return null;
     }
 
+    // Helper function to extract ID from populated or non-populated field
+    const extractId = (value) => {
+      if (!value) return null;
+      if (typeof value === "string") {
+        return value;
+      }
+      if (value._id) {
+        return value._id.toString();
+      }
+      if (value.toString) {
+        const str = value.toString();
+        // Check if it's a valid ObjectId format (24 hex chars)
+        if (/^[0-9a-fA-F]{24}$/.test(str)) {
+          return str;
+        }
+      }
+      return null;
+    };
+
     return new CommercialInvoice(
       document._id.toString(),
-      document.fromDistributor?.toString() || document.fromDistributor,
-      document.toPharmacy?.toString() || document.toPharmacy,
-      document.drug?.toString() || document.drug,
-      document.proofOfPharmacy?.toString() || null,
-      document.nftInfo?.toString() || null,
+      extractId(document.fromDistributor),
+      extractId(document.toPharmacy),
+      extractId(document.drug),
+      extractId(document.proofOfPharmacy),
+      extractId(document.nftInfo),
       document.invoiceNumber,
       document.invoiceDate || null,
       document.quantity || 0,

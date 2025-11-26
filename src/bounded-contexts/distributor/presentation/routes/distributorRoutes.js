@@ -437,19 +437,88 @@ export const createDistributorRoutes = (distributorController) => {
    *             type: object
    *             required:
    *               - pharmacyId
+   *               - drugId
    *               - tokenIds
    *             properties:
    *               pharmacyId:
    *                 type: string
+   *                 description: ID của nhà thuốc
+   *               drugId:
+   *                 type: string
+   *                 description: ID của thuốc
    *               tokenIds:
    *                 type: array
    *                 items:
    *                   type: string
+   *                 description: Danh sách token ID của NFT cần chuyển giao
    *               invoiceNumber:
    *                 type: string
+   *                 description: Số hóa đơn (nếu không có sẽ tự động generate)
+   *               invoiceDate:
+   *                 type: string
+   *                 format: date-time
+   *                 description: Ngày tạo hóa đơn
+   *               quantity:
+   *                 type: number
+   *                 description: Số lượng (nếu không có sẽ tính từ số lượng tokenIds)
+   *               unitPrice:
+   *                 type: number
+   *                 description: Đơn giá
+   *               totalAmount:
+   *                 type: number
+   *                 description: Tổng tiền trước VAT
+   *               vatRate:
+   *                 type: number
+   *                 description: Thuế VAT (%)
+   *               vatAmount:
+   *                 type: number
+   *                 description: Số tiền VAT
+   *               finalAmount:
+   *                 type: number
+   *                 description: Tổng tiền sau VAT
+   *               notes:
+   *                 type: string
+   *                 description: Ghi chú
    *     responses:
-   *       200:
+   *       201:
    *         description: Tạo invoice thành công
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 message:
+   *                   type: string
+   *                   example: "Chuyển giao cho pharmacy thành công"
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     invoiceId:
+   *                       type: string
+   *                     invoiceNumber:
+   *                       type: string
+   *                     status:
+   *                       type: string
+   *                     tokenIds:
+   *                       type: array
+   *                       items:
+   *                         type: string
+   *                     quantity:
+   *                       type: number
+   *                     createdAt:
+   *                       type: string
+   *                       format: date-time
+   *       400:
+   *         description: Dữ liệu không hợp lệ
+   *       403:
+   *         description: Không có quyền truy cập
+   *       404:
+   *         description: Không tìm thấy resource
+   *       500:
+   *         description: Lỗi server
    */
   router.post("/transfer/pharmacy", (req, res) =>
     distributorController.transferToPharmacy(req, res)

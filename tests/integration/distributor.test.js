@@ -192,6 +192,7 @@ describe("Distributor Workflow Tests", () => {
         .set("Authorization", `Bearer ${authToken}`)
         .send({
           pharmacyId: pharmacyDoc.pharmacy._id,
+          drugId: drug._id,
           tokenIds,
           amounts,
           invoiceNumber: `CI-${Date.now()}`,
@@ -222,6 +223,7 @@ describe("Distributor Workflow Tests", () => {
         .set("Authorization", `Bearer ${authToken}`)
         .send({
           pharmacyId: pharmacyDoc.pharmacy._id,
+          drugId: drug._id,
           tokenIds,
           amounts,
           invoiceNumber: `CI-${Date.now()}`,
@@ -274,6 +276,7 @@ describe("Distributor Workflow Tests", () => {
         .set("Authorization", `Bearer ${authToken}`)
         .send({
           pharmacyId: pharmacyDoc.pharmacy._id,
+          drugId: drug._id,
           tokenIds: [otherNFT.tokenId],
           amounts: [1],
         });

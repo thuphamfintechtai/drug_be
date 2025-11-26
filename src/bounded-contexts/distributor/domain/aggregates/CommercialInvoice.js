@@ -208,9 +208,18 @@ export class CommercialInvoice extends AggregateRoot {
   }
 
   markAsSent(chainTxHash = null) {
-    if (this._status !== CommercialInvoiceStatus.ISSUED) {
-      throw new Error("Chỉ có thể mark sent invoice ở trạng thái issued");
+    if (this._status !== CommercialInvoiceStatus.ISSUED && this._status !== CommercialInvoiceStatus.SENT) {
+      throw new Error("Chỉ có thể mark sent invoice ở trạng thái issued hoặc sent");
     }
+    
+    // If already sent and chainTxHash matches, no need to update (idempotency)
+    if (this._status === CommercialInvoiceStatus.SENT && this._chainTxHash && chainTxHash) {
+      const currentHash = this._chainTxHash.value || this._chainTxHash;
+      if (currentHash === chainTxHash) {
+        return; // Already processed with same hash
+      }
+    }
+    
     this._status = CommercialInvoiceStatus.SENT;
     if (chainTxHash) {
       this._chainTxHash = TransactionHash.create(chainTxHash);

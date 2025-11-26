@@ -56,17 +56,70 @@ export class TransferToPharmacyUseCase {
       throw new Error(`Không tìm thấy một số tokenId: ${missingTokenIds.join(", ")}`);
     }
 
-    // Validate all NFTs belong to distributor and can be transferred
+    // Normalize distributorId to string for comparison
+    const normalizedDistributorId = distributorId ? String(distributorId).trim() : null;
+
+    // Check if NFTs have already been transferred (possibly by blockchain event)
+    const alreadyTransferredNFTs = [];
     for (const nft of nfts) {
-      if (nft.ownerId !== distributorId) {
-        throw new Error(`NFT với tokenId ${nft.tokenId} không thuộc về distributor này`);
+      // Normalize ownerId to string for comparison
+      const normalizedOwnerId = nft.ownerId ? String(nft.ownerId).trim() : null;
+      
+      if (normalizedOwnerId !== normalizedDistributorId) {
+        // NFT has been transferred - check if there's an existing invoice
+        alreadyTransferredNFTs.push({
+          tokenId: nft.tokenId,
+          currentOwner: normalizedOwnerId,
+          status: nft.status
+        });
       }
+    }
+
+    // If some NFTs have been transferred, check for existing invoice
+    if (alreadyTransferredNFTs.length > 0) {
+      // Try to find existing invoice with these tokenIds
+      const existingInvoices = await this._commercialInvoiceRepository.findByDistributor(distributorId, {});
+      const matchingInvoice = existingInvoices.find(inv => {
+        const invoiceTokenIds = (inv.tokenIds || []).map(id => String(id).trim());
+        const requestTokenIds = tokenIds.map(id => String(id).trim());
+        return requestTokenIds.every(tid => invoiceTokenIds.includes(tid));
+      });
+
+      if (matchingInvoice) {
+        // Return existing invoice (idempotency)
+        return {
+          invoiceId: matchingInvoice.id,
+          invoiceNumber: matchingInvoice.invoiceNumber,
+          status: matchingInvoice.status,
+          tokenIds: matchingInvoice.tokenIds,
+          quantity: matchingInvoice.quantity,
+          createdAt: matchingInvoice.createdAt,
+          message: "Invoice đã tồn tại cho các tokenIds này (có thể đã được tạo bởi blockchain event)"
+        };
+      }
+
+      // NFT has been transferred but no invoice found
+      const transferredTokenIds = alreadyTransferredNFTs.map(nft => nft.tokenId).join(", ");
+      throw new Error(
+        `Các NFT sau đã được transfer (có thể bởi blockchain event): ${transferredTokenIds}. ` +
+        `Owner hiện tại của NFT đầu tiên: ${alreadyTransferredNFTs[0].currentOwner || 'null'}, ` +
+        `Distributor ID: ${normalizedDistributorId || 'null'}. ` +
+        `Vui lòng kiểm tra lại hoặc đợi blockchain event xử lý xong trước khi tạo invoice.`
+      );
+    }
+
+    // Validate all NFTs belong to distributor and can be transferred
+    for (const nft of nfts) { 
 
       if (!nft.canBeTransferred()) {
         throw new Error(`NFT với tokenId ${nft.tokenId} không thể chuyển giao (status: ${nft.status})`);
       }
 
-      if (nft.drugId !== drugId) {
+      // Normalize drugId for comparison
+      const normalizedNftDrugId = nft.drugId ? String(nft.drugId).trim() : null;
+      const normalizedDrugId = drugId ? String(drugId).trim() : null;
+      
+      if (normalizedNftDrugId !== normalizedDrugId) {
         throw new Error(`NFT với tokenId ${nft.tokenId} không thuộc về thuốc này`);
       }
     }
@@ -106,20 +159,21 @@ export class TransferToPharmacyUseCase {
 
     invoice.issue(); // Automatically issue the invoice
 
-    await this._commercialInvoiceRepository.save(invoice);
+    const savedInvoice = await this._commercialInvoiceRepository.save(invoice);
 
     // Publish domain events
     invoice.domainEvents.forEach(event => {
       this._eventBus.publish(event);
     });
 
+    // Return saved invoice with ObjectId from database (not UUID from domain entity)
     return {
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      status: invoice.status,
-      tokenIds: invoice.tokenIds,
-      quantity: invoice.quantity,
-      createdAt: invoice.createdAt,
+      invoiceId: savedInvoice.id, // This is now ObjectId from MongoDB
+      invoiceNumber: savedInvoice.invoiceNumber,
+      status: savedInvoice.status,
+      tokenIds: savedInvoice.tokenIds,
+      quantity: savedInvoice.quantity,
+      createdAt: savedInvoice.createdAt,
     };
   }
 }

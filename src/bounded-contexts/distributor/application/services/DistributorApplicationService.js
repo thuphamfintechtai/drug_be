@@ -113,28 +113,53 @@ export class DistributorApplicationService {
     // Find invoice
     const invoice = await this._commercialInvoiceRepository.findById(invoiceId);
     if (!invoice) {
-      throw new Error("Không tìm thấy invoice");
+      throw new Error(`Không tìm thấy invoice với ID: ${invoiceId}. Vui lòng kiểm tra lại invoiceId.`);
     }
+
+    // Normalize IDs for comparison
+    const normalizedDistributorId = distributorId ? String(distributorId).trim() : null;
+    const normalizedFromDistributorId = invoice.fromDistributorId ? String(invoice.fromDistributorId).trim() : null;
 
     // Check ownership
-    if (invoice.fromDistributorId !== distributorId) {
-      throw new Error("Bạn không có quyền cập nhật invoice này");
+    if (normalizedFromDistributorId !== normalizedDistributorId) {
+      throw new Error(
+        `Bạn không có quyền cập nhật invoice này. ` +
+        `Invoice thuộc về distributor: ${normalizedFromDistributorId || 'null'}, ` +
+        `Distributor hiện tại: ${normalizedDistributorId || 'null'}`
+      );
     }
 
-    // CRITICAL: Check invoice status must be "issued"
-    if (invoice.status !== "issued") {
-      throw new Error(`Invoice phải ở trạng thái "issued" để lưu transaction. Trạng thái hiện tại: ${invoice.status}`);
-    }
 
-    // CRITICAL: Check if transactionHash already exists (idempotency)
-    if (invoice.chainTxHash === transactionHash) {
+    const currentChainTxHash = invoice.chainTxHash 
+      ? (invoice.chainTxHash.value || invoice.chainTxHash.toString() || invoice.chainTxHash)
+      : null;
+
+    if (currentChainTxHash === transactionHash) {
       // Already processed, return current state
       return {
         invoiceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         status: invoice.status,
-        chainTxHash: invoice.chainTxHash,
+        chainTxHash: currentChainTxHash,
       };
+    }
+
+    // CRITICAL: Check invoice status
+    // Allow "issued" or "sent" (sent can happen if blockchain event processed first)
+    if (invoice.status !== "issued" && invoice.status !== "sent") {
+      throw new Error(
+        `Invoice phải ở trạng thái "issued" hoặc "sent" để lưu transaction. ` +
+        `Trạng thái hiện tại: ${invoice.status}`
+      );
+    }
+
+    // If invoice is already "sent" but chainTxHash doesn't match, it means blockchain event
+    // processed it with a different transaction hash, or this is a duplicate call
+    if (invoice.status === "sent" && currentChainTxHash && currentChainTxHash !== transactionHash) {
+      throw new Error(
+        `Invoice đã được xử lý với transaction hash khác: ${currentChainTxHash}. ` +
+        `Transaction hash hiện tại: ${transactionHash}`
+      );
     }
 
     // CRITICAL: Validate tokenIds match invoice.tokenIds exactly
@@ -165,9 +190,18 @@ export class DistributorApplicationService {
     }
 
     // Validate NFTs still belong to distributor before transfer
+    // Normalize IDs for comparison
+    const normalizedDistributorIdForNFT = distributorId ? String(distributorId).trim() : null;
+    
     for (const nft of nfts) {
-      if (nft.ownerId !== distributorId) {
-        throw new Error(`NFT với tokenId ${nft.tokenId} không còn thuộc về distributor này. Owner hiện tại: ${nft.ownerId}`);
+      const normalizedNftOwnerId = nft.ownerId ? String(nft.ownerId).trim() : null;
+      
+      if (normalizedNftOwnerId !== normalizedDistributorIdForNFT) {
+        throw new Error(
+          `NFT với tokenId ${nft.tokenId} không còn thuộc về distributor này. ` +
+          `Owner hiện tại: ${normalizedNftOwnerId || 'null'}, ` +
+          `Distributor ID: ${normalizedDistributorIdForNFT || 'null'}`
+        );
       }
     }
 
@@ -177,8 +211,8 @@ export class DistributorApplicationService {
     
     try {
       await session.withTransaction(async () => {
-        // Update invoice with transaction hash
-        invoice.setChainTxHash(transactionHash);
+        // Update invoice with transaction hash and mark as sent
+        // Note: markAsSent already sets chainTxHash, so we don't need to call setChainTxHash separately
         invoice.markAsSent(transactionHash);
         await this._commercialInvoiceRepository.save(invoice, { session });
 

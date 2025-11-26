@@ -5,12 +5,24 @@ import mongoose from "mongoose";
 
 export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
   async findById(id) {
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return null;
     }
-    
-    const document = await CommercialInvoiceModel.findById(id)
+
+    // Try to find by ObjectId first
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      const document = await CommercialInvoiceModel.findById(id)
+        .populate("fromDistributor")
+        .populate("toPharmacy")
+        .populate("drug")
+        .populate("proofOfPharmacy")
+        .populate("nftInfo");
+      return CommercialInvoiceMapper.toDomain(document);
+    }
+
+    // If not ObjectId, try to find by invoiceNumber (for backward compatibility)
+    // This handles cases where UUID was used as invoiceId
+    const document = await CommercialInvoiceModel.findOne({ invoiceNumber: id })
       .populate("fromDistributor")
       .populate("toPharmacy")
       .populate("drug")
