@@ -57,7 +57,13 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
 
     const documents = await CommercialInvoiceModel.find(query)
       .populate("fromDistributor")
-      .populate("toPharmacy")
+      .populate({
+        path: "toPharmacy",
+        populate: {
+          path: "pharmacy",
+          model: "Pharmacy",
+        },
+      })
       .populate("drug")
       .populate("proofOfPharmacy")
       .populate("nftInfo")
@@ -82,7 +88,13 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
 
     const documents = await CommercialInvoiceModel.find(query)
       .populate("fromDistributor")
-      .populate("toPharmacy")
+      .populate({
+        path: "toPharmacy",
+        populate: {
+          path: "pharmacy",
+          model: "Pharmacy",
+        },
+      })
       .populate("drug")
       .populate("proofOfPharmacy")
       .populate("nftInfo")

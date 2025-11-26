@@ -33,7 +33,8 @@ export class CommercialInvoice extends AggregateRoot {
     status = CommercialInvoiceStatus.DRAFT,
     chainTxHash = null,
     tokenIds = [],
-    supplyChainCompleted = false
+    supplyChainCompleted = false,
+    pharmacyInfo = null
   ) {
     super(id);
     this._fromDistributorId = fromDistributorId;
@@ -53,6 +54,7 @@ export class CommercialInvoice extends AggregateRoot {
     this._chainTxHash = chainTxHash instanceof TransactionHash ? chainTxHash : (chainTxHash ? TransactionHash.create(chainTxHash) : null);
     this._tokenIds = tokenIds || [];
     this._supplyChainCompleted = supplyChainCompleted;
+    this._pharmacyInfo = pharmacyInfo;
     this._createdAt = new Date();
     this._updatedAt = new Date();
   }
@@ -92,7 +94,8 @@ export class CommercialInvoice extends AggregateRoot {
       CommercialInvoiceStatus.DRAFT,
       null,
       tokenIds,
-      false
+      false,
+      null
     );
 
     // Emit domain event
@@ -189,6 +192,14 @@ export class CommercialInvoice extends AggregateRoot {
 
   get supplyChainCompleted() {
     return this._supplyChainCompleted;
+  }
+
+  get pharmacyInfo() {
+    return this._pharmacyInfo;
+  }
+
+  get pharmacyName() {
+    return this._pharmacyInfo?.name || null;
   }
 
   get createdAt() {
