@@ -58,6 +58,27 @@ export class ConfirmReceiptUseCase {
       batchNumber = firstNft.batchNumber;
     }
 
+    // Normalize IDs to ensure they are strings (not objects)
+    const normalizeId = (id) => {
+      if (!id) return null;
+      if (typeof id === 'string') return id.trim();
+      if (id && id.toString) {
+        const str = id.toString();
+        // Check if it's a valid ObjectId format (24 hex chars)
+        if (/^[0-9a-fA-F]{24}$/.test(str)) {
+          return str;
+        }
+        return str;
+      }
+      return String(id).trim();
+    };
+
+    const normalizedFromDistributorId = normalizeId(invoice.fromDistributorId);
+    const normalizedPharmacyId = normalizeId(pharmacyId);
+    const normalizedInvoiceId = normalizeId(dto.invoiceId);
+    const normalizedNftInfoId = normalizeId(invoice.nftInfoId);
+    const normalizedDrugId = normalizeId(invoice.drugId);
+
     // Find or create Proof of Pharmacy
     let proofOfPharmacy = null;
     const existingProofs = await this._proofOfPharmacyRepository.findByCommercialInvoice(dto.invoiceId);
@@ -97,13 +118,13 @@ export class ConfirmReceiptUseCase {
     } else {
       // Create new proof of pharmacy
       proofOfPharmacy = ProofOfPharmacy.create(
-        invoice.fromDistributorId,
-        pharmacyId,
+        normalizedFromDistributorId,
+        normalizedPharmacyId,
         dto.receivedQuantity || invoice.quantity,
-        dto.invoiceId,
+        normalizedInvoiceId,
         null, // proofOfDistributionId
-        invoice.nftInfoId,
-        invoice.drugId,
+        normalizedNftInfoId,
+        normalizedDrugId,
         dto.receiptDate || new Date(),
         batchNumber ? BatchNumber.create(batchNumber) : null,
         dto.receivedBy,
@@ -115,7 +136,14 @@ export class ConfirmReceiptUseCase {
       proofOfPharmacy.confirmReceipt();
     }
 
-    await this._proofOfPharmacyRepository.save(proofOfPharmacy);
+    const savedProofOfPharmacy = await this._proofOfPharmacyRepository.save(proofOfPharmacy);
+
+    // Update CommercialInvoice with proofOfPharmacyId if not already set
+    if (!invoice.proofOfPharmacyId) {
+      const normalizedProofOfPharmacyId = normalizeId(savedProofOfPharmacy.id);
+      invoice.setProofOfPharmacyId(normalizedProofOfPharmacyId);
+      await this._commercialInvoiceRepository.save(invoice);
+    }
 
     // Publish domain events
     proofOfPharmacy.domainEvents.forEach(event => {
@@ -123,10 +151,10 @@ export class ConfirmReceiptUseCase {
     });
 
     return {
-      proofOfPharmacyId: proofOfPharmacy.id,
+      proofOfPharmacyId: savedProofOfPharmacy.id,
       invoiceId: invoice.id,
-      status: proofOfPharmacy.status,
-      batchNumber: proofOfPharmacy.batchNumber,
+      status: savedProofOfPharmacy.status,
+      batchNumber: savedProofOfPharmacy.batchNumber,
     };
   }
 }

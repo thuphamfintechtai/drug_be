@@ -47,6 +47,25 @@ export class CommercialInvoiceMapper {
         }
       : null;
 
+    const distributorDoc = document.fromDistributor;
+    const populatedDistributor = distributorDoc && distributorDoc.distributor;
+
+    const distributorInfo = distributorDoc
+      ? {
+          id: extractId(populatedDistributor) || extractId(distributorDoc),
+          name:
+            (populatedDistributor && populatedDistributor.name) ||
+            distributorDoc.fullName ||
+            distributorDoc.username ||
+            null,
+          code:
+            (populatedDistributor && (populatedDistributor.licenseNo || populatedDistributor.taxCode)) ||
+            null,
+          email: distributorDoc.email || null,
+          phone: distributorDoc.phone || null,
+        }
+      : null;
+
     return new CommercialInvoice(
       document._id.toString(),
       extractId(document.fromDistributor),
@@ -66,7 +85,8 @@ export class CommercialInvoiceMapper {
       document.chainTxHash || null,
       document.tokenIds || [],
       document.supplyChainCompleted || false,
-      pharmacyInfo
+      pharmacyInfo,
+      distributorInfo
     );
   }
 

@@ -12,7 +12,13 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
     // Try to find by ObjectId first
     if (mongoose.Types.ObjectId.isValid(id)) {
       const document = await CommercialInvoiceModel.findById(id)
-        .populate("fromDistributor")
+        .populate({
+          path: "fromDistributor",
+          populate: {
+            path: "distributor",
+            model: "Distributor",
+          },
+        })
         .populate("toPharmacy")
         .populate("drug")
         .populate("proofOfPharmacy")
@@ -22,18 +28,30 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
 
     // If not ObjectId, try to find by invoiceNumber (for backward compatibility)
     // This handles cases where UUID was used as invoiceId
-    const document = await CommercialInvoiceModel.findOne({ invoiceNumber: id })
-      .populate("fromDistributor")
-      .populate("toPharmacy")
-      .populate("drug")
-      .populate("proofOfPharmacy")
-      .populate("nftInfo");
+      const document = await CommercialInvoiceModel.findOne({ invoiceNumber: id })
+        .populate({
+          path: "fromDistributor",
+          populate: {
+            path: "distributor",
+            model: "Distributor",
+          },
+        })
+        .populate("toPharmacy")
+        .populate("drug")
+        .populate("proofOfPharmacy")
+        .populate("nftInfo");
     return CommercialInvoiceMapper.toDomain(document);
   }
 
   async findByInvoiceNumber(invoiceNumber) {
     const document = await CommercialInvoiceModel.findOne({ invoiceNumber })
-      .populate("fromDistributor")
+      .populate({
+        path: "fromDistributor",
+        populate: {
+          path: "distributor",
+          model: "Distributor",
+        },
+      })
       .populate("toPharmacy")
       .populate("drug")
       .populate("proofOfPharmacy")
@@ -56,7 +74,13 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
     }
 
     const documents = await CommercialInvoiceModel.find(query)
-      .populate("fromDistributor")
+      .populate({
+        path: "fromDistributor",
+        populate: {
+          path: "distributor",
+          model: "Distributor",
+        },
+      })
       .populate({
         path: "toPharmacy",
         populate: {
@@ -87,7 +111,13 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
     }
 
     const documents = await CommercialInvoiceModel.find(query)
-      .populate("fromDistributor")
+      .populate({
+        path: "fromDistributor",
+        populate: {
+          path: "distributor",
+          model: "Distributor",
+        },
+      })
       .populate({
         path: "toPharmacy",
         populate: {
@@ -120,7 +150,13 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
         { $set: document },
         updateOptions
       )
-        .populate("fromDistributor")
+        .populate({
+          path: "fromDistributor",
+          populate: {
+            path: "distributor",
+            model: "Distributor",
+          },
+        })
         .populate("toPharmacy")
         .populate("drug")
         .populate("proofOfPharmacy")
@@ -135,7 +171,13 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
       }
       const savedDoc = created[0] || created;
       const saved = await CommercialInvoiceModel.findById(savedDoc._id)
-        .populate("fromDistributor")
+        .populate({
+          path: "fromDistributor",
+          populate: {
+            path: "distributor",
+            model: "Distributor",
+          },
+        })
         .populate("toPharmacy")
         .populate("drug")
         .populate("proofOfPharmacy")

@@ -10,14 +10,33 @@ export class ProofOfPharmacyMapper {
       return null;
     }
 
+    // Helper function to extract ID from populated or non-populated field
+    const extractId = (value) => {
+      if (!value) return null;
+      if (typeof value === "string") {
+        return value.trim();
+      }
+      if (value._id) {
+        return value._id.toString();
+      }
+      if (value.toString) {
+        const str = value.toString();
+        // Check if it's a valid ObjectId format (24 hex chars)
+        if (/^[0-9a-fA-F]{24}$/.test(str)) {
+          return str;
+        }
+      }
+      return null;
+    };
+
     return new ProofOfPharmacy(
       document._id.toString(),
-      document.fromDistributor?.toString() || document.fromDistributor,
-      document.toPharmacy?.toString() || document.toPharmacy,
-      document.commercialInvoice?.toString() || null,
-      document.proofOfDistribution?.toString() || null,
-      document.nftInfo?.toString() || null,
-      document.drug?.toString() || null,
+      extractId(document.fromDistributor) || document.fromDistributor,
+      extractId(document.toPharmacy) || document.toPharmacy,
+      extractId(document.commercialInvoice) || null,
+      extractId(document.proofOfDistribution) || null,
+      extractId(document.nftInfo) || null,
+      extractId(document.drug) || null,
       document.receiptDate || null,
       document.receivedQuantity || 0,
       document.batchNumber || null,
@@ -35,13 +54,45 @@ export class ProofOfPharmacyMapper {
       return null;
     }
 
+    // Helper function to normalize ID to string/ObjectId
+    const normalizeId = (id) => {
+      if (!id) return null;
+      if (typeof id === 'string') {
+        const trimmed = id.trim();
+        // Return null if empty string
+        if (trimmed === '') return null;
+        // Return as-is if valid ObjectId format
+        if (/^[0-9a-fA-F]{24}$/.test(trimmed)) {
+          return trimmed;
+        }
+        return trimmed;
+      }
+      // If it's an object, try to extract _id or toString
+      if (id && typeof id === 'object') {
+        if (id._id) {
+          return id._id.toString();
+        }
+        if (id.toString) {
+          const str = id.toString();
+          if (/^[0-9a-fA-F]{24}$/.test(str)) {
+            return str;
+          }
+        }
+        // If it's a complex object, return null to avoid casting error
+        return null;
+      }
+      // For other types, convert to string
+      const str = String(id).trim();
+      return str === '' ? null : str;
+    };
+
     const document = {
-      fromDistributor: aggregate.fromDistributorId,
-      toPharmacy: aggregate.toPharmacyId,
-      commercialInvoice: aggregate.commercialInvoiceId || null,
-      proofOfDistribution: aggregate.proofOfDistributionId || null,
-      nftInfo: aggregate.nftInfoId || null,
-      drug: aggregate.drugId || null,
+      fromDistributor: normalizeId(aggregate.fromDistributorId),
+      toPharmacy: normalizeId(aggregate.toPharmacyId),
+      commercialInvoice: normalizeId(aggregate.commercialInvoiceId),
+      proofOfDistribution: normalizeId(aggregate.proofOfDistributionId),
+      nftInfo: normalizeId(aggregate.nftInfoId),
+      drug: normalizeId(aggregate.drugId),
       receiptDate: aggregate.receiptDate || null,
       receivedQuantity: aggregate.receivedQuantity,
       batchNumber: aggregate.batchNumber || null,

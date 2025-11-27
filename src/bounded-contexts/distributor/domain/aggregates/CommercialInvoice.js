@@ -34,7 +34,8 @@ export class CommercialInvoice extends AggregateRoot {
     chainTxHash = null,
     tokenIds = [],
     supplyChainCompleted = false,
-    pharmacyInfo = null
+    pharmacyInfo = null,
+    distributorInfo = null
   ) {
     super(id);
     this._fromDistributorId = fromDistributorId;
@@ -55,6 +56,7 @@ export class CommercialInvoice extends AggregateRoot {
     this._tokenIds = tokenIds || [];
     this._supplyChainCompleted = supplyChainCompleted;
     this._pharmacyInfo = pharmacyInfo;
+    this._distributorInfo = distributorInfo;
     this._createdAt = new Date();
     this._updatedAt = new Date();
   }
@@ -196,6 +198,19 @@ export class CommercialInvoice extends AggregateRoot {
 
   get pharmacyInfo() {
     return this._pharmacyInfo;
+  }
+
+  updatePharmacy(pharmacyId) {
+    if (!pharmacyId) {
+      throw new Error("Pharmacy ID không hợp lệ");
+    }
+    this._toPharmacyId = pharmacyId;
+    this._updatedAt = new Date();
+  }
+
+  setProofOfPharmacyId(proofOfPharmacyId) {
+    this._proofOfPharmacyId = proofOfPharmacyId;
+    this._updatedAt = new Date();
   }
 
   get pharmacyName() {

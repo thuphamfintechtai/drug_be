@@ -23,18 +23,49 @@ export class PharmacyController {
 
       const invoices = await this._pharmacyService.getInvoicesFromDistributor(pharmacyId, filters);
 
+      // Get all unique distributor IDs
+      const distributorIds = [...new Set(invoices.map(inv => inv.fromDistributorId).filter(Boolean))];
+
+      // Query distributors directly from DistributorModel
+      const { DistributorModel } = await import(
+        "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+      );
+      
+      const distributors = distributorIds.length > 0
+        ? await DistributorModel.find({ user: { $in: distributorIds } }).lean()
+        : [];
+
+      // Create a map of distributorId -> distributor info for quick lookup
+      const distributorMap = new Map();
+      distributors.forEach(dist => {
+        const userId = dist.user ? (dist.user.toString ? dist.user.toString() : String(dist.user)) : null;
+        if (userId) {
+          distributorMap.set(userId, {
+            id: dist._id.toString(),
+            name: dist.name || null,
+            code: dist.licenseNo || dist.taxCode || null,
+            email: dist.contactEmail || null,
+            phone: dist.contactPhone || null,
+            address: dist.address || null,
+            country: dist.country || null,
+          });
+        }
+      });
+
       return res.status(200).json({
         success: true,
         data: invoices.map(inv => ({
           id: inv.id,
           invoiceNumber: inv.invoiceNumber,
           distributorId: inv.fromDistributorId,
+          distributor: inv.fromDistributorId ? distributorMap.get(inv.fromDistributorId) || null : null,
           drugId: inv.drugId,
           quantity: inv.quantity,
           status: inv.status,
           chainTxHash: inv.chainTxHash,
           tokenIds: inv.tokenIds,
           createdAt: inv.createdAt,
+          isPharmaConfirm: inv.proofOfPharmacyId != null && inv.proofOfPharmacyId !== null,
         })),
         count: invoices.length,
       });

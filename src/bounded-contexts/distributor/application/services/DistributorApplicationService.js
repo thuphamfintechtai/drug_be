@@ -79,9 +79,14 @@ export class DistributorApplicationService {
     finalAmount = null,
     notes = null
   ) {
+    const resolvedPharmacyId = await this._resolvePharmacyUserId(pharmacyId);
+    if (!resolvedPharmacyId) {
+      throw new Error("Không xác định được pharmacy hợp lệ từ pharmacyId được cung cấp");
+    }
+
     return await this._transferToPharmacyUseCase.execute(
       distributorId,
-      pharmacyId,
+      resolvedPharmacyId,
       drugId,
       tokenIds,
       invoiceNumber,
@@ -119,6 +124,24 @@ export class DistributorApplicationService {
     // Normalize IDs for comparison
     const normalizedDistributorId = distributorId ? String(distributorId).trim() : null;
     const normalizedFromDistributorId = invoice.fromDistributorId ? String(invoice.fromDistributorId).trim() : null;
+    const invoicePharmacyId = invoice.toPharmacyId ? String(invoice.toPharmacyId).trim() : null;
+    let normalizedPharmacyId = invoicePharmacyId;
+
+    if (!normalizedPharmacyId) {
+      normalizedPharmacyId = await this._getInvoicePharmacyId(invoiceId);
+    }
+
+    const normalizedPharmacyUserId = await this._resolvePharmacyUserId(normalizedPharmacyId);
+    if (!normalizedPharmacyUserId) {
+      throw new Error(
+        `Không xác định được pharmacy gắn với invoice ${invoiceId}. ` +
+        `Vui lòng kiểm tra lại dữ liệu trước khi lưu transaction.`
+      );
+    }
+
+    if (!invoicePharmacyId || invoicePharmacyId !== normalizedPharmacyUserId) {
+      invoice.updatePharmacy(normalizedPharmacyUserId);
+    }
 
     // Check ownership
     if (normalizedFromDistributorId !== normalizedDistributorId) {
@@ -191,8 +214,6 @@ export class DistributorApplicationService {
 
     // Normalize IDs for comparison
     const normalizedDistributorIdForNFT = distributorId ? String(distributorId).trim() : null;
-    const normalizedPharmacyId = invoice.toPharmacyId ? String(invoice.toPharmacyId).trim() : null;
-    
     // Check NFT ownership: NFT có thể đã được transfer trên blockchain trước đó
     // Nếu NFT đã thuộc về pharmacy, chỉ cần update transaction hash
     // Nếu NFT vẫn thuộc về distributor, thì transfer
@@ -201,12 +222,12 @@ export class DistributorApplicationService {
       
       // NFT phải thuộc về distributor (chưa transfer) hoặc pharmacy (đã transfer trên blockchain)
       if (normalizedNftOwnerId !== normalizedDistributorIdForNFT && 
-          normalizedNftOwnerId !== normalizedPharmacyId) {
+          normalizedNftOwnerId !== normalizedPharmacyUserId) {
         throw new Error(
           `NFT với tokenId ${nft.tokenId} không thuộc về distributor hoặc pharmacy trong invoice. ` +
           `Owner hiện tại: ${normalizedNftOwnerId || 'null'}, ` +
           `Distributor ID: ${normalizedDistributorIdForNFT || 'null'}, ` +
-          `Pharmacy ID: ${normalizedPharmacyId || 'null'}`
+          `Pharmacy ID (user): ${normalizedPharmacyUserId || 'null'}`
         );
       }
     }
@@ -238,7 +259,7 @@ export class DistributorApplicationService {
             
             // Only transfer if NFT still belongs to distributor
             if (shouldTransfer) {
-              nft.transfer(invoice.toPharmacyId, transactionHash);
+              nft.transfer(normalizedPharmacyUserId, transactionHash);
             }
             // If NFT already transferred on blockchain, no need to transfer again
             
@@ -558,6 +579,42 @@ export class DistributorApplicationService {
       to: new Date(),
       dailyStats,
     };
+  }
+
+  async _getInvoicePharmacyId(invoiceId) {
+    if (!invoiceId) {
+      return null;
+    }
+
+    const mongoose = await import("mongoose");
+    const objectId = String(invoiceId).trim();
+    if (!mongoose.default.Types.ObjectId.isValid(objectId)) {
+      return null;
+    }
+
+    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
+    const rawInvoice = await CommercialInvoiceModel.findById(objectId).select("toPharmacy").lean();
+    return rawInvoice?.toPharmacy ? rawInvoice.toPharmacy.toString() : null;
+  }
+
+  async _resolvePharmacyUserId(pharmacyId) {
+    if (!pharmacyId) {
+      return null;
+    }
+
+    const normalizedId = String(pharmacyId).trim();
+    const mongoose = await import("mongoose");
+    if (!mongoose.default.Types.ObjectId.isValid(normalizedId)) {
+      return normalizedId;
+    }
+
+    const { PharmacyModel } = await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js");
+    const pharmacyEntity = await PharmacyModel.findById(normalizedId).select("user");
+    if (pharmacyEntity?.user) {
+      return pharmacyEntity.user.toString();
+    }
+
+    return normalizedId;
   }
 
   async getChartTodayYesterday(distributorId) {
