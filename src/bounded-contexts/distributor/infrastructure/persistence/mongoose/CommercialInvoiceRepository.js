@@ -133,6 +133,58 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
     return documents.map(doc => CommercialInvoiceMapper.toDomain(doc));
   }
 
+  /**
+   * Tìm invoice có chứa tất cả tokenIds được chỉ định
+   * @param {string} distributorId 
+   * @param {string} pharmacyId 
+   * @param {string} drugId 
+   * @param {string[]} tokenIds 
+   * @returns {Promise<CommercialInvoice|null>}
+   */
+  async findByTokenIds(distributorId, pharmacyId, drugId, tokenIds) {
+    if (!tokenIds || tokenIds.length === 0) {
+      return null;
+    }
+
+    // Normalize tokenIds to strings
+    const normalizedTokenIds = tokenIds.map(id => String(id).trim()).sort();
+    
+    // Tìm các invoice có chứa ít nhất một tokenId trong danh sách
+    // Chỉ tìm invoice ở trạng thái draft hoặc issued (chưa sent) để tránh duplicate
+    const documents = await CommercialInvoiceModel.find({
+      fromDistributor: distributorId,
+      toPharmacy: pharmacyId,
+      drug: drugId,
+      tokenIds: { $in: normalizedTokenIds },
+      status: { $in: ["draft", "issued"] } // Chỉ check invoice chưa sent
+    })
+      .populate({
+        path: "fromDistributor",
+        populate: {
+          path: "distributor",
+          model: "Distributor",
+        },
+      })
+      .populate("toPharmacy")
+      .populate("drug")
+      .populate("proofOfPharmacy")
+      .populate("nftInfo")
+      .sort({ createdAt: -1 });
+
+    // Tìm invoice có chứa TẤT CẢ tokenIds (không thừa, không thiếu)
+    for (const doc of documents) {
+      const invoiceTokenIds = (doc.tokenIds || []).map(id => String(id).trim()).sort();
+      
+      // Check if invoice contains exactly the same tokenIds
+      if (invoiceTokenIds.length === normalizedTokenIds.length &&
+          invoiceTokenIds.every((tid, idx) => tid === normalizedTokenIds[idx])) {
+        return CommercialInvoiceMapper.toDomain(doc);
+      }
+    }
+
+    return null;
+  }
+
   async save(invoice, options = {}) {
     const document = CommercialInvoiceMapper.toPersistence(invoice);
     const { session } = options;
@@ -140,6 +192,7 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
     const isObjectId = invoice.id && invoice.id.length === 24 && /^[0-9a-fA-F]{24}$/.test(invoice.id);
 
     if (isObjectId && document._id) {
+      // Update existing invoice
       const updateOptions = { new: true, runValidators: true };
       if (session) {
         updateOptions.session = session;
@@ -163,6 +216,122 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
         .populate("nftInfo");
       return CommercialInvoiceMapper.toDomain(updated);
     } else {
+      // Create new invoice
+      // Check if invoiceNumber already exists to prevent duplicate
+      if (document.invoiceNumber) {
+        const existingQuery = { invoiceNumber: document.invoiceNumber };
+        if (session) {
+          // Use session for consistency
+          const existing = await CommercialInvoiceModel.findOne(existingQuery).session(session);
+          if (existing) {
+            // Invoice với invoiceNumber này đã tồn tại, update thay vì tạo mới
+            const updateOptions = { new: true, runValidators: true, session };
+            
+            const updated = await CommercialInvoiceModel.findByIdAndUpdate(
+              existing._id,
+              { $set: document },
+              updateOptions
+            )
+              .populate({
+                path: "fromDistributor",
+                populate: {
+                  path: "distributor",
+                  model: "Distributor",
+                },
+              })
+              .populate("toPharmacy")
+              .populate("drug")
+              .populate("proofOfPharmacy")
+              .populate("nftInfo");
+            return CommercialInvoiceMapper.toDomain(updated);
+          }
+        } else {
+          const existing = await CommercialInvoiceModel.findOne(existingQuery);
+          if (existing) {
+            // Invoice với invoiceNumber này đã tồn tại, update thay vì tạo mới
+            const updateOptions = { new: true, runValidators: true };
+            
+            const updated = await CommercialInvoiceModel.findByIdAndUpdate(
+              existing._id,
+              { $set: document },
+              updateOptions
+            )
+              .populate({
+                path: "fromDistributor",
+                populate: {
+                  path: "distributor",
+                  model: "Distributor",
+                },
+              })
+              .populate("toPharmacy")
+              .populate("drug")
+              .populate("proofOfPharmacy")
+              .populate("nftInfo");
+            return CommercialInvoiceMapper.toDomain(updated);
+          }
+        }
+      }
+      
+      // Check for duplicate by tokenIds, distributor, pharmacy, drug (within transaction if session provided)
+      const duplicateQuery = {
+        fromDistributor: document.fromDistributor,
+        toPharmacy: document.toPharmacy,
+        drug: document.drug,
+        tokenIds: { $all: document.tokenIds, $size: document.tokenIds.length },
+        status: { $in: ["draft", "issued"] } // Chỉ check invoice chưa sent
+      };
+      
+      if (session) {
+        const existingByTokenIds = await CommercialInvoiceModel.findOne(duplicateQuery).session(session);
+        if (existingByTokenIds) {
+          // Invoice với cùng tokenIds đã tồn tại, update thay vì tạo mới
+          const updateOptions = { new: true, runValidators: true, session };
+          
+          const updated = await CommercialInvoiceModel.findByIdAndUpdate(
+            existingByTokenIds._id,
+            { $set: document },
+            updateOptions
+          )
+            .populate({
+              path: "fromDistributor",
+              populate: {
+                path: "distributor",
+                model: "Distributor",
+              },
+            })
+            .populate("toPharmacy")
+            .populate("drug")
+            .populate("proofOfPharmacy")
+            .populate("nftInfo");
+          return CommercialInvoiceMapper.toDomain(updated);
+        }
+      } else {
+        const existingByTokenIds = await CommercialInvoiceModel.findOne(duplicateQuery);
+        if (existingByTokenIds) {
+          // Invoice với cùng tokenIds đã tồn tại, update thay vì tạo mới
+          const updateOptions = { new: true, runValidators: true };
+          
+          const updated = await CommercialInvoiceModel.findByIdAndUpdate(
+            existingByTokenIds._id,
+            { $set: document },
+            updateOptions
+          )
+            .populate({
+              path: "fromDistributor",
+              populate: {
+                path: "distributor",
+                model: "Distributor",
+              },
+            })
+            .populate("toPharmacy")
+            .populate("drug")
+            .populate("proofOfPharmacy")
+            .populate("nftInfo");
+          return CommercialInvoiceMapper.toDomain(updated);
+        }
+      }
+      
+      // Create new invoice - no duplicate found
       let created;
       if (session) {
         created = await CommercialInvoiceModel.create([document], { session });

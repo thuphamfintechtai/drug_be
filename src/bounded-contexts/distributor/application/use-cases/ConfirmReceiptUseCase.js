@@ -46,16 +46,68 @@ export class ConfirmReceiptUseCase {
       throw new Error("Danh sách NFT không đầy đủ so với tokenIds của invoice");
     }
 
+    // Normalize IDs for comparison
+    const normalizeId = (id) => {
+      if (!id) return null;
+      if (typeof id === 'string') return id.trim();
+      if (id && id.toString) {
+        const str = id.toString().trim();
+        if (/^[0-9a-fA-F]{24}$/.test(str)) {
+          return str;
+        }
+        return str;
+      }
+      return String(id).trim();
+    };
+
+    // Resolve distributorId to User ID if it's a Distributor entity ID
+    let normalizedDistributorId = normalizeId(distributorId);
+    const { DistributorModel } = await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js");
+    const mongoose = await import("mongoose");
+    
+    // Check if distributorId is a Distributor entity ID
+    if (mongoose.default.Types.ObjectId.isValid(normalizedDistributorId)) {
+      const distributorEntity = await DistributorModel.findById(normalizedDistributorId).select("user").lean();
+      if (distributorEntity && distributorEntity.user) {
+        // If found, use the User ID instead
+        normalizedDistributorId = normalizeId(distributorEntity.user);
+      }
+    }
+
+    // Also check invoice.toDistributorId to see if it needs normalization
+    let normalizedInvoiceDistributorId = normalizeId(invoice.toDistributorId);
+    if (mongoose.default.Types.ObjectId.isValid(normalizedInvoiceDistributorId)) {
+      const invoiceDistributorEntity = await DistributorModel.findById(normalizedInvoiceDistributorId).select("user").lean();
+      if (invoiceDistributorEntity && invoiceDistributorEntity.user) {
+        normalizedInvoiceDistributorId = normalizeId(invoiceDistributorEntity.user);
+      }
+    }
+
     console.log("Distributor confirm:", {
       distributorId,
-      nftOwners: nfts.map(nft => ({ tokenId: nft.tokenId, ownerId: nft.ownerId })),
+      normalizedDistributorId,
+      invoiceDistributorId: invoice.toDistributorId,
+      normalizedInvoiceDistributorId,
+      nftOwners: nfts.map(nft => ({ 
+        tokenId: nft.tokenId, 
+        ownerId: nft.ownerId,
+        normalizedOwnerId: normalizeId(nft.ownerId)
+      })),
     });
 
-    const unauthorizedNFTs = nfts.filter(nft => nft.ownerId !== distributorId);
+    // Check NFT ownership - normalize both sides for comparison
+    const unauthorizedNFTs = nfts.filter(nft => {
+      const normalizedNftOwnerId = normalizeId(nft.ownerId);
+      // NFT owner must match either the current distributorId or invoice.toDistributorId
+      return normalizedNftOwnerId !== normalizedDistributorId && 
+             normalizedNftOwnerId !== normalizedInvoiceDistributorId;
+    });
+
     if (unauthorizedNFTs.length > 0) {
       const tokens = unauthorizedNFTs.map(nft => nft.tokenId).join(", ");
       throw new Error(
-        `Các NFT chưa thuộc quyền sở hữu distributor hiện tại: ${tokens}`
+        `Các NFT chưa thuộc quyền sở hữu distributor hiện tại: ${tokens}. ` +
+        `Distributor ID: ${normalizedDistributorId}, Invoice Distributor ID: ${normalizedInvoiceDistributorId}`
       );
     }
 

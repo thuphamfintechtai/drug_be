@@ -287,43 +287,184 @@ export class ProductionController {
         });
       }
 
+      // Normalize function for ID comparison
+      const normalizeId = (id) => {
+        if (!id) return null;
+        if (typeof id === 'string') return id.trim();
+        if (id && id.toString) {
+          return id.toString().trim();
+        }
+        return String(id).trim();
+      };
+
+      const normalizedManufacturerId = normalizeId(manufacturerId);
+
+      // Check NFT ownership - normalize both sides for comparison
       for (const nft of nfts) {
-        if (nft.ownerId !== manufacturerId) {
+        const normalizedNftOwnerId = normalizeId(nft.ownerId);
+        if (normalizedNftOwnerId !== normalizedManufacturerId) {
           return res.status(403).json({
             success: false,
-            message: `NFT ${nft.tokenId} không thuộc manufacturer hiện tại`,
+            message: `NFT ${nft.tokenId} không thuộc manufacturer hiện tại. Owner: ${normalizedNftOwnerId}, Manufacturer: ${normalizedManufacturerId}`,
           });
         }
       }
 
-      // Update invoice + NFTs trong session MongoDB để đảm bảo consistency
+      // Normalize distributorId to User ID if it's a Distributor entity ID
+      let normalizedDistributorId = invoice.toDistributorId;
+      const { DistributorModel } = await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js");
       const mongoose = await import("mongoose");
+
+      // Check if toDistributorId is a Distributor entity ID
+      const invoiceDistributorIdStr = normalizeId(invoice.toDistributorId);
+      if (invoiceDistributorIdStr && mongoose.default.Types.ObjectId.isValid(invoiceDistributorIdStr)) {
+        const distributorEntity = await DistributorModel.findById(invoiceDistributorIdStr).select("user").lean();
+        if (distributorEntity && distributorEntity.user) {
+          // If found, use the User ID instead
+          normalizedDistributorId = normalizeId(distributorEntity.user);
+        } else {
+          // If not found as Distributor entity, assume it's already a User ID
+          normalizedDistributorId = invoiceDistributorIdStr;
+        }
+      } else {
+        normalizedDistributorId = invoiceDistributorIdStr;
+      }
+
+      if (!normalizedDistributorId) {
+        return res.status(400).json({
+          success: false,
+          message: "Không thể xác định distributor ID hợp lệ từ invoice",
+        });
+      }
+
+      console.log("Transfer NFT to distributor:", {
+        invoiceDistributorId: invoice.toDistributorId,
+        normalizedDistributorId,
+        tokenIds: receivedTokens,
+      });
+
+      // Update invoice + NFTs trong session MongoDB để đảm bảo consistency
       const session = await mongoose.default.startSession();
+      let invoiceAlreadySent = false;
       try {
         await session.withTransaction(async () => {
-          invoice.send(transactionHash);
-          await this._manufacturerInvoiceRepository.save(invoice, { session });
+          // Reload invoice trong transaction để tránh race condition
+          const freshInvoice = await this._manufacturerInvoiceRepository.findById(invoiceId);
+          if (!freshInvoice) {
+            throw new Error("Invoice không tồn tại");
+          }
+          
+          // Check status lại trong transaction
+          if (freshInvoice.status === "sent") {
+            invoiceAlreadySent = true;
+            
+            // Invoice đã được gửi, check xem transactionHash có khớp không
+            const currentHash = freshInvoice.chainTxHash ? 
+              (typeof freshInvoice.chainTxHash === 'string' ? freshInvoice.chainTxHash : 
+               (freshInvoice.chainTxHash.value || String(freshInvoice.chainTxHash))) : null;
+            
+            if (currentHash === transactionHash) {
+              // Đã được xử lý với cùng hash, không cần làm gì
+              return; // Early return, không cần update NFTs nữa
+            }
+            
+            // Invoice đã sent nhưng hash khác hoặc chưa có, chỉ update hash (idempotency)
+            if (transactionHash && !currentHash) {
+              // Update hash mà không thay đổi status
+              if (freshInvoice._chainTxHash) {
+                freshInvoice._chainTxHash = transactionHash;
+              } else {
+                freshInvoice.send(transactionHash); // Method send() đã handle idempotency
+              }
+              await this._manufacturerInvoiceRepository.save(freshInvoice, { session });
+            }
+            return; // Invoice đã sent, không cần transfer NFTs nữa
+          } else if (freshInvoice.status === "issued") {
+            // Invoice ở trạng thái issued, có thể send
+            freshInvoice.send(transactionHash);
+            await this._manufacturerInvoiceRepository.save(freshInvoice, { session });
+            invoiceAlreadySent = false; // Invoice mới được send
+          } else {
+            throw new Error(`Invoice phải ở trạng thái issued hoặc sent (current: ${freshInvoice.status})`);
+          }
 
-          await Promise.all(
-            nfts.map((nft) => {
-              nft.setMintTransaction(transactionHash);
-              nft.transfer(invoice.toDistributorId, transactionHash);
-              return this._nftRepository.save(nft, { session });
-            })
-          );
+          // Transfer each NFT and save (chỉ khi invoice chưa sent)
+          if (!invoiceAlreadySent) {
+            const savedNFTs = await Promise.all(
+              nfts.map(async (nft) => {
+                // Reload NFT trong transaction để đảm bảo data fresh
+                const freshNft = await this._nftRepository.findByTokenIds([nft.tokenId]);
+                if (freshNft.length === 0) {
+                  throw new Error(`Không tìm thấy NFT với tokenId: ${nft.tokenId}`);
+                }
+                const currentNft = freshNft[0];
+                
+                // Set transaction hash
+                currentNft.setMintTransaction(transactionHash);
+                // Transfer to normalized distributor User ID
+                currentNft.transfer(normalizedDistributorId, transactionHash);
+                // Save and return
+                const saved = await this._nftRepository.save(currentNft, { session });
+                
+                console.log(`NFT ${currentNft.tokenId} transferred:`, {
+                  tokenId: currentNft.tokenId,
+                  oldOwner: manufacturerId,
+                  newOwner: normalizedDistributorId,
+                  savedOwnerId: saved.ownerId,
+                });
+                
+                return saved;
+              })
+            );
+
+            // Verify all NFTs were transferred correctly
+            const failedTransfers = savedNFTs.filter(saved => {
+              const savedOwnerId = normalizeId(saved.ownerId);
+              return savedOwnerId !== normalizedDistributorId;
+            });
+
+            if (failedTransfers.length > 0) {
+              throw new Error(
+                `Một số NFT không được transfer đúng: ${failedTransfers.map(nft => nft.tokenId).join(", ")}`
+              );
+            }
+          }
         });
       } finally {
         await session.endSession();
       }
+      
+      // Reload invoice sau transaction để trả về data mới nhất
+      const updatedInvoice = await this._manufacturerInvoiceRepository.findById(invoiceId);
+      
+      // Nếu invoice đã sent từ trước, trả về message idempotency
+      if (invoiceAlreadySent) {
+        return res.status(200).json({
+          success: true,
+          message: "Invoice đã được gửi trước đó",
+          data: {
+            invoiceId: updatedInvoice.id,
+            invoiceNumber: updatedInvoice.invoiceNumber,
+            status: updatedInvoice.status,
+            chainTxHash: updatedInvoice.chainTxHash ? 
+              (updatedInvoice.chainTxHash.value || updatedInvoice.chainTxHash) : null,
+          },
+        });
+      }
 
+      // Nếu chưa return ở trên (invoice chưa sent), trả về response thành công
+      const finalInvoice = updatedInvoice || invoice;
+      const chainTxHashValue = finalInvoice.chainTxHash ? 
+        (finalInvoice.chainTxHash.value || finalInvoice.chainTxHash) : null;
+      
       return res.status(200).json({
         success: true,
         message: "Lưu transaction thành công",
         data: {
-          invoiceId: invoice.id,
-          invoiceNumber: invoice.invoiceNumber,
-          status: invoice.status,
-          chainTxHash: invoice.chainTxHash,
+          invoiceId: finalInvoice.id,
+          invoiceNumber: finalInvoice.invoiceNumber,
+          status: finalInvoice.status,
+          chainTxHash: chainTxHashValue,
         },
       });
     } catch (error) {

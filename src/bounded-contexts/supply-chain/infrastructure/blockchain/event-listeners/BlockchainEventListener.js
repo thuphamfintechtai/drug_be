@@ -108,29 +108,62 @@ export class BlockchainEventListener {
             }
 
             // Tìm CommercialInvoice liên quan
+            // Check theo tokenId để tránh tạo duplicate
             let commercialInvoice = await CommercialInvoiceModel.findOne({
               fromDistributor: distributor._id,
               toPharmacy: pharmacy._id,
-              nftInfo: nftInfo._id,
+              drug: nftInfo.drug,
+              tokenIds: tokenIdStr, // Tìm invoice có chứa tokenId này
             });
 
             if (!commercialInvoice) {
-              // Tạo mới CommercialInvoice nếu chưa có
-              const drug = nftInfo.drug;
-              commercialInvoice = new CommercialInvoiceModel({
+              // Kiểm tra xem có invoice nào khác với cùng distributor, pharmacy, drug nhưng chưa có tokenId này không
+              // Nếu có, thêm tokenId vào invoice đó thay vì tạo mới
+              const existingInvoice = await CommercialInvoiceModel.findOne({
                 fromDistributor: distributor._id,
                 toPharmacy: pharmacy._id,
-                drug: drug,
-                nftInfo: nftInfo._id,
-                invoiceNumber: `CI-${Date.now()}-${tokenIdStr}`,
-                invoiceDate: transferDate,
-                quantity: nftInfo.quantity || 1,
-                status: "sent",
-                chainTxHash: transactionHash,
-                tokenIds: [tokenIdStr],
-              });
+                drug: nftInfo.drug,
+                status: { $in: ["draft", "issued", "sent"] }, // Chỉ check các invoice chưa hoàn thành
+              }).sort({ createdAt: -1 }); // Lấy invoice mới nhất
 
-              await commercialInvoice.save();
+              if (existingInvoice) {
+                // Thêm tokenId vào invoice hiện có nếu chưa có
+                if (!existingInvoice.tokenIds.includes(tokenIdStr)) {
+                  existingInvoice.tokenIds.push(tokenIdStr);
+                  existingInvoice.quantity = (existingInvoice.quantity || 0) + (nftInfo.quantity || 1);
+                  if (!existingInvoice.chainTxHash) {
+                    existingInvoice.chainTxHash = transactionHash;
+                  }
+                  existingInvoice.status = "sent";
+                  await existingInvoice.save();
+                  commercialInvoice = existingInvoice;
+                } else {
+                  // TokenId đã có trong invoice, chỉ cập nhật transaction hash nếu cần
+                  commercialInvoice = existingInvoice;
+                  if (!commercialInvoice.chainTxHash) {
+                    commercialInvoice.chainTxHash = transactionHash;
+                    commercialInvoice.status = "sent";
+                    await commercialInvoice.save();
+                  }
+                }
+              } else {
+                // Tạo mới CommercialInvoice nếu chưa có
+                const drug = nftInfo.drug;
+                commercialInvoice = new CommercialInvoiceModel({
+                  fromDistributor: distributor._id,
+                  toPharmacy: pharmacy._id,
+                  drug: drug,
+                  nftInfo: nftInfo._id,
+                  invoiceNumber: `CI-${Date.now()}-${tokenIdStr}`,
+                  invoiceDate: transferDate,
+                  quantity: nftInfo.quantity || 1,
+                  status: "sent",
+                  chainTxHash: transactionHash,
+                  tokenIds: [tokenIdStr],
+                });
+
+                await commercialInvoice.save();
+              }
             } else {
               // Cập nhật CommercialInvoice nếu đã có
               if (!commercialInvoice.chainTxHash) {
@@ -138,6 +171,7 @@ export class BlockchainEventListener {
               }
               if (!commercialInvoice.tokenIds.includes(tokenIdStr)) {
                 commercialInvoice.tokenIds.push(tokenIdStr);
+                commercialInvoice.quantity = (commercialInvoice.quantity || 0) + (nftInfo.quantity || 1);
               }
               commercialInvoice.status = "sent";
               await commercialInvoice.save();

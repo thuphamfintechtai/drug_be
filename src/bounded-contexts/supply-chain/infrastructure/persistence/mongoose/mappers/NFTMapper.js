@@ -98,21 +98,53 @@ export class NFTMapper {
       return null;
     }
 
+    // Helper function to normalize ID to string/ObjectId
+    const normalizeId = (id) => {
+      if (!id) return null;
+      if (typeof id === 'string') {
+        const trimmed = id.trim();
+        // Return null if empty string
+        if (trimmed === '') return null;
+        // Return as-is if valid ObjectId format
+        if (/^[0-9a-fA-F]{24}$/.test(trimmed)) {
+          return trimmed;
+        }
+        return trimmed;
+      }
+      // If it's an object, try to extract _id or toString
+      if (id && typeof id === 'object') {
+        if (id._id) {
+          return id._id.toString();
+        }
+        if (id.toString) {
+          const str = id.toString();
+          if (/^[0-9a-fA-F]{24}$/.test(str)) {
+            return str;
+          }
+        }
+        // If it's a complex object, return null to avoid casting error
+        return null;
+      }
+      // For other types, convert to string
+      const str = String(id).trim();
+      return str === '' ? null : str;
+    };
+
     const document = {
       tokenId: aggregate.tokenId,
-      drug: aggregate.drugId,
+      drug: normalizeId(aggregate.drugId),
       serialNumber: aggregate.serialNumber,
       batchNumber: aggregate.batchNumber,
       quantity: aggregate.quantity,
       mfgDate: aggregate.mfgDate || null,
       expDate: aggregate.expDate || null,
-      owner: aggregate.ownerId || null,
+      owner: normalizeId(aggregate.ownerId),
       status: aggregate.status,
       chainTxHash: aggregate.chainTxHash || null,
       ipfsUrl: aggregate.ipfsUrl || null,
       ipfsHash: aggregate.ipfsHash || null,
       metadata: aggregate.metadata || null,
-      proofOfProduction: aggregate.proofOfProductionId || null,
+      proofOfProduction: normalizeId(aggregate.proofOfProductionId),
       updatedAt: aggregate.updatedAt || new Date(),
     };
 

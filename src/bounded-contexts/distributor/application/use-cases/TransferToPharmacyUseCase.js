@@ -138,28 +138,98 @@ export class TransferToPharmacyUseCase {
     // Generate invoice number if not provided
     const finalInvoiceNumber = invoiceNumber || `INV-${Date.now()}-${crypto.randomUUID().substring(0, 8)}`;
 
-    // Create commercial invoice
-    const invoice = CommercialInvoice.create(
-      distributorId,
-      pharmacyId,
-      drugId,
-      finalInvoiceNumber,
-      calculatedQuantity,
-      tokenIds,
-      invoiceDate,
-      null, // proofOfPharmacyId - will be set later
-      nftInfoId,
-      unitPrice,
-      totalAmount,
-      vatRate,
-      vatAmount,
-      finalAmount,
-      notes
-    );
+    // Use MongoDB transaction to ensure atomicity and prevent duplicate
+    const mongoose = await import("mongoose");
+    const session = await mongoose.default.startSession();
+    
+    try {
+      let savedInvoice;
+      let invoiceAggregate = null; // Store aggregate to access domain events
+      
+      await session.withTransaction(async () => {
+        // Check for existing invoice WITHIN transaction to prevent race condition
+        const existingInvoice = await this._commercialInvoiceRepository.findByTokenIds(
+          distributorId,
+          pharmacyId,
+          drugId,
+          tokenIds
+        );
 
-    invoice.issue(); // Automatically issue the invoice
+        // Chỉ return invoice cũ nếu nó ở trạng thái draft hoặc issued (chưa sent)
+        if (existingInvoice && (existingInvoice.status === "draft" || existingInvoice.status === "issued")) {
+          // Invoice đã tồn tại, return nó
+          savedInvoice = existingInvoice;
+          return; // Early return, không tạo mới
+        }
 
-    const savedInvoice = await this._commercialInvoiceRepository.save(invoice);
+        // Create commercial invoice
+        invoiceAggregate = CommercialInvoice.create(
+          distributorId,
+          pharmacyId,
+          drugId,
+          finalInvoiceNumber,
+          calculatedQuantity,
+          tokenIds,
+          invoiceDate,
+          null, // proofOfPharmacyId - will be set later
+          nftInfoId,
+          unitPrice,
+          totalAmount,
+          vatRate,
+          vatAmount,
+          finalAmount,
+          notes
+        );
+
+        invoiceAggregate.issue(); // Automatically issue the invoice
+
+        // Save within transaction
+        savedInvoice = await this._commercialInvoiceRepository.save(invoiceAggregate, { session });
+      });
+      
+      // If invoice already existed, return it
+      if (savedInvoice && savedInvoice.id) {
+        // Check if this is the existing invoice (by checking if it was just created)
+        const checkInvoice = await this._commercialInvoiceRepository.findById(savedInvoice.id);
+        if (checkInvoice && (checkInvoice.status === "draft" || checkInvoice.status === "issued")) {
+          // This might be an existing invoice, double check by tokenIds
+          const invoiceTokenIds = (checkInvoice.tokenIds || []).map(id => String(id).trim()).sort();
+          const requestTokenIds = tokenIds.map(id => String(id).trim()).sort();
+          
+          if (invoiceTokenIds.length === requestTokenIds.length &&
+              invoiceTokenIds.every((tid, idx) => tid === requestTokenIds[idx])) {
+            // This is the existing invoice
+            return {
+              invoiceId: checkInvoice.id,
+              invoiceNumber: checkInvoice.invoiceNumber,
+              status: checkInvoice.status,
+              tokenIds: checkInvoice.tokenIds,
+              quantity: checkInvoice.quantity,
+              createdAt: checkInvoice.createdAt,
+              message: "Invoice đã tồn tại cho các tokenIds này (idempotency check)"
+            };
+          }
+        }
+      }
+      
+      // Publish domain events AFTER transaction commits (only if new invoice was created)
+      if (invoiceAggregate && invoiceAggregate.domainEvents && invoiceAggregate.domainEvents.length > 0) {
+        invoiceAggregate.domainEvents.forEach(event => {
+          this._eventBus.publish(event);
+        });
+      }
+      
+      return {
+        invoiceId: savedInvoice.id,
+        invoiceNumber: savedInvoice.invoiceNumber,
+        status: savedInvoice.status,
+        tokenIds: savedInvoice.tokenIds,
+        quantity: savedInvoice.quantity,
+        createdAt: savedInvoice.createdAt,
+      };
+    } finally {
+      await session.endSession();
+    }
 
     // Publish domain events
     invoice.domainEvents.forEach(event => {

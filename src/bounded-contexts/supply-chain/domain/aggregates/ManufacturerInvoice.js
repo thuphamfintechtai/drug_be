@@ -230,9 +230,29 @@ export class ManufacturerInvoice extends AggregateRoot {
   }
 
   send(chainTxHash = null) {
+    // Idempotency: Nếu đã sent và chainTxHash khớp, không cần làm gì
+    if (this._status === InvoiceStatus.SENT && this._chainTxHash && chainTxHash) {
+      const currentHash = this._chainTxHash.value || this._chainTxHash;
+      if (currentHash === chainTxHash) {
+        return; // Đã được xử lý với cùng hash, không cần update
+      }
+    }
+    
+    // Nếu đã sent nhưng chainTxHash khác hoặc chưa có, vẫn cho phép update hash
+    if (this._status === InvoiceStatus.SENT) {
+      if (chainTxHash && !this._chainTxHash) {
+        // Invoice đã sent nhưng chưa có hash, cập nhật hash
+        this._chainTxHash = TransactionHash.create(chainTxHash);
+        this._updatedAt = new Date();
+      }
+      return; // Đã sent rồi, không cần thay đổi status
+    }
+    
+    // Chỉ cho phép send từ trạng thái issued
     if (this._status !== InvoiceStatus.ISSUED) {
       throw new Error("Chỉ có thể send invoice ở trạng thái issued");
     }
+    
     this._status = InvoiceStatus.SENT;
     if (chainTxHash) {
       this._chainTxHash = TransactionHash.create(chainTxHash);
