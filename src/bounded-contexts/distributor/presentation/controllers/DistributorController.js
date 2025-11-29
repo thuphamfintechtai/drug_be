@@ -1129,7 +1129,7 @@ export class DistributorController {
 
   async getDashboardStats(req, res) {
     try {
-      const distributorId = req.user?._id?.toString();
+      const distributorId = req.user?.id || req.user?._id?.toString();
 
       if (!distributorId) {
         return res.status(403).json({

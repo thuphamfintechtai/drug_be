@@ -971,6 +971,13 @@ export class DistributorApplicationService {
     const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
     const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
     const { NFTInfoModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js");
+    const mongoose = (await import("mongoose")).default;
+
+    // Convert distributorId to ObjectId if it's a string
+    let distributorObjectId = distributorId;
+    if (typeof distributorId === 'string' && mongoose.Types.ObjectId.isValid(distributorId)) {
+      distributorObjectId = new mongoose.Types.ObjectId(distributorId);
+    }
 
     // Get date ranges
     const { start: startOfToday } = DateHelper.getTodayRange();
@@ -979,21 +986,21 @@ export class DistributorApplicationService {
 
     // === INVOICES FROM MANUFACTURER ===
     const totalInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorId,
+      toDistributor: distributorObjectId,
     });
 
     const todayInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorId,
+      toDistributor: distributorObjectId,
       createdAt: { $gte: startOfToday },
     });
 
     const yesterdayInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorId,
+      toDistributor: distributorObjectId,
       createdAt: { $gte: startOfYesterday, $lt: startOfToday },
     });
 
     const weekInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorId,
+      toDistributor: distributorObjectId,
       createdAt: { $gte: sevenDaysAgo },
     });
 
@@ -1002,41 +1009,57 @@ export class DistributorApplicationService {
 
     // Invoices by status
     const invoicesByStatus = {
+      draft: await ManufacturerInvoiceModel.countDocuments({
+        toDistributor: distributorObjectId,
+        status: "draft",
+      }),
       pending: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorId,
+        toDistributor: distributorObjectId,
         status: "pending",
       }),
       issued: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorId,
+        toDistributor: distributorObjectId,
         status: "issued",
       }),
+      confirmed: await ManufacturerInvoiceModel.countDocuments({
+        toDistributor: distributorObjectId,
+        status: "confirmed",
+      }),
+      delivered: await ManufacturerInvoiceModel.countDocuments({
+        toDistributor: distributorObjectId,
+        status: "delivered",
+      }),
       sent: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorId,
+        toDistributor: distributorObjectId,
         status: "sent",
       }),
       paid: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorId,
+        toDistributor: distributorObjectId,
         status: "paid",
+      }),
+      cancelled: await ManufacturerInvoiceModel.countDocuments({
+        toDistributor: distributorObjectId,
+        status: "cancelled",
       }),
     };
 
     // === DISTRIBUTIONS ===
     const totalDistributions = await ProofOfDistributionModel.countDocuments({
-      toDistributor: distributorId,
+      toDistributor: distributorObjectId,
     });
 
     const todayDistributions = await ProofOfDistributionModel.countDocuments({
-      toDistributor: distributorId,
+      toDistributor: distributorObjectId,
       createdAt: { $gte: startOfToday },
     });
 
     const yesterdayDistributions = await ProofOfDistributionModel.countDocuments({
-      toDistributor: distributorId,
+      toDistributor: distributorObjectId,
       createdAt: { $gte: startOfYesterday, $lt: startOfToday },
     });
 
     const weekDistributions = await ProofOfDistributionModel.countDocuments({
-      toDistributor: distributorId,
+      toDistributor: distributorObjectId,
       createdAt: { $gte: sevenDaysAgo },
     });
 
@@ -1046,40 +1069,44 @@ export class DistributorApplicationService {
     // Distributions by status
     const distributionsByStatus = {
       pending: await ProofOfDistributionModel.countDocuments({
-        toDistributor: distributorId,
+        toDistributor: distributorObjectId,
         status: "pending",
       }),
       in_transit: await ProofOfDistributionModel.countDocuments({
-        toDistributor: distributorId,
+        toDistributor: distributorObjectId,
         status: "in_transit",
       }),
       delivered: await ProofOfDistributionModel.countDocuments({
-        toDistributor: distributorId,
+        toDistributor: distributorObjectId,
         status: "delivered",
       }),
       confirmed: await ProofOfDistributionModel.countDocuments({
-        toDistributor: distributorId,
+        toDistributor: distributorObjectId,
         status: "confirmed",
+      }),
+      rejected: await ProofOfDistributionModel.countDocuments({
+        toDistributor: distributorObjectId,
+        status: "rejected",
       }),
     };
 
     // === TRANSFERS TO PHARMACY ===
     const totalTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorId,
+      fromDistributor: distributorObjectId,
     });
 
     const todayTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorId,
+      fromDistributor: distributorObjectId,
       createdAt: { $gte: startOfToday },
     });
 
     const yesterdayTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorId,
+      fromDistributor: distributorObjectId,
       createdAt: { $gte: startOfYesterday, $lt: startOfToday },
     });
 
     const weekTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorId,
+      fromDistributor: distributorObjectId,
       createdAt: { $gte: sevenDaysAgo },
     });
 
@@ -1089,42 +1116,58 @@ export class DistributorApplicationService {
     // Transfers by status
     const transfersByStatus = {
       draft: await CommercialInvoiceModel.countDocuments({
-        fromDistributor: distributorId,
+        fromDistributor: distributorObjectId,
         status: "draft",
       }),
+      issued: await CommercialInvoiceModel.countDocuments({
+        fromDistributor: distributorObjectId,
+        status: "issued",
+      }),
       sent: await CommercialInvoiceModel.countDocuments({
-        fromDistributor: distributorId,
+        fromDistributor: distributorObjectId,
         status: "sent",
       }),
       paid: await CommercialInvoiceModel.countDocuments({
-        fromDistributor: distributorId,
+        fromDistributor: distributorObjectId,
         status: "paid",
+      }),
+      cancelled: await CommercialInvoiceModel.countDocuments({
+        fromDistributor: distributorObjectId,
+        status: "cancelled",
       }),
     };
 
     // === NFTs ===
     const totalNFTs = await NFTInfoModel.countDocuments({
-      owner: distributorId,
+      owner: distributorObjectId,
     });
 
     const nftsByStatus = {
       minted: await NFTInfoModel.countDocuments({
-        owner: distributorId,
+        owner: distributorObjectId,
         status: "minted",
       }),
       transferred: await NFTInfoModel.countDocuments({
-        owner: distributorId,
+        owner: distributorObjectId,
         status: "transferred",
       }),
       sold: await NFTInfoModel.countDocuments({
-        owner: distributorId,
+        owner: distributorObjectId,
         status: "sold",
+      }),
+      expired: await NFTInfoModel.countDocuments({
+        owner: distributorObjectId,
+        status: "expired",
+      }),
+      recalled: await NFTInfoModel.countDocuments({
+        owner: distributorObjectId,
+        status: "recalled",
       }),
     };
 
     // === RECENT ACTIVITIES ===
     const recentInvoices = await ManufacturerInvoiceModel.find({
-      toDistributor: distributorId,
+      toDistributor: distributorObjectId,
     })
       .sort({ createdAt: -1 })
       .limit(5)
@@ -1132,7 +1175,7 @@ export class DistributorApplicationService {
       .lean();
 
     const recentTransfers = await CommercialInvoiceModel.find({
-      fromDistributor: distributorId,
+      fromDistributor: distributorObjectId,
     })
       .sort({ createdAt: -1 })
       .limit(5)
