@@ -100,10 +100,12 @@ export class TrackDrugUseCase {
     if (nft.proofOfProduction) {
       productionId = nft.proofOfProduction._id || nft.proofOfProduction;
 
-      if (nft.proofOfProduction._id) {
+      if (nft.proofOfProduction._id && nft.proofOfProduction.manufacturer) {
         production = nft.proofOfProduction;
       } else {
-        production = await ProofOfProductionModel.findById(productionId).lean();
+        production = await ProofOfProductionModel.findById(productionId)
+          .populate("manufacturer", "name") // Populate manufacturer for later use
+          .lean();
       }
 
       if (production && production.batchNumber) {
@@ -157,8 +159,8 @@ export class TrackDrugUseCase {
           : null,
       ].filter(Boolean),
     })
-      .populate("fromManufacturer", "username email fullName walletAddress")
-      .populate("toDistributor", "username email fullName walletAddress")
+      .populate("fromManufacturer", "name licenseNo taxCode contactEmail contactPhone address country") // PharmaCompany fields
+      .populate("toDistributor", "username email fullName walletAddress") // User fields
       .sort({ createdAt: -1 })
       .lean();
 
@@ -177,8 +179,8 @@ export class TrackDrugUseCase {
         { nftInfo: { $in: batchNFTIds } },
       ].filter(Boolean),
     })
-      .populate("fromManufacturer", "username email fullName")
-      .populate("toDistributor", "username email fullName")
+      .populate("fromManufacturer", "name licenseNo taxCode contactEmail contactPhone address country") // PharmaCompany fields
+      .populate("toDistributor", "username email fullName") // User fields
       .sort({ createdAt: -1 })
       .lean();
 
@@ -215,10 +217,91 @@ export class TrackDrugUseCase {
     })
       .populate("fromDistributor", "username email fullName walletAddress")
       .populate("toPharmacy", "username email fullName walletAddress")
+      .populate("nftInfo", "batchNumber") // Populate nftInfo to get batchNumber
       .sort({ createdAt: -1 })
       .lean();
 
     const commercialInvoice = commercialInvoices[0] || null;
+
+    // Get Business Entity names for enriched data
+    const { DistributorModel, PharmacyModel } = await import(
+      "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+    );
+
+    // Collect all User IDs to query Business Entities
+    const distributorUserIds = [
+      ...new Set([
+        ...manufacturerInvoices.map(inv => inv.toDistributor?._id?.toString()).filter(Boolean),
+        ...proofOfDistributions.map(pod => pod.toDistributor?._id?.toString()).filter(Boolean),
+        ...proofOfPharmacies.map(pop => pop.fromDistributor?._id?.toString()).filter(Boolean),
+        ...commercialInvoices.map(ci => ci.fromDistributor?._id?.toString()).filter(Boolean),
+      ]),
+    ];
+
+    const pharmacyUserIds = [
+      ...new Set([
+        ...proofOfPharmacies.map(pop => pop.toPharmacy?._id?.toString()).filter(Boolean),
+        ...commercialInvoices.map(ci => ci.toPharmacy?._id?.toString()).filter(Boolean),
+      ]),
+    ];
+
+    // fromManufacturer is PharmaCompany entity ID, not User ID
+    // Also include production.manufacturer
+    const extractManufacturerId = (manufacturer) => {
+      if (!manufacturer) return null;
+      if (manufacturer._id) return manufacturer._id.toString();
+      if (typeof manufacturer === 'object' && manufacturer.toString) return manufacturer.toString();
+      if (typeof manufacturer === 'string') return manufacturer;
+      return null;
+    };
+
+    const manufacturerEntityIds = [
+      ...new Set([
+        ...manufacturerInvoices.map(inv => extractManufacturerId(inv.fromManufacturer)).filter(Boolean),
+        ...proofOfDistributions.map(pod => extractManufacturerId(pod.fromManufacturer)).filter(Boolean),
+        production ? extractManufacturerId(production.manufacturer) : null,
+        nft.proofOfProduction ? extractManufacturerId(nft.proofOfProduction.manufacturer) : null,
+      ].filter(Boolean)),
+    ];
+
+    // Query Business Entities
+    const distributors = distributorUserIds.length > 0
+      ? await DistributorModel.find({ user: { $in: distributorUserIds } }).select("user name").lean()
+      : [];
+
+    const pharmacies = pharmacyUserIds.length > 0
+      ? await PharmacyModel.find({ user: { $in: pharmacyUserIds } }).select("user name").lean()
+      : [];
+
+    // Query PharmaCompany directly by entity ID (not by user)
+    const manufacturers = manufacturerEntityIds.length > 0
+      ? await PharmaCompanyModel.find({ _id: { $in: manufacturerEntityIds } }).select("_id name").lean()
+      : [];
+
+    // Create maps for quick lookup
+    const distributorNameMap = new Map();
+    distributors.forEach(dist => {
+      const userId = dist.user ? (dist.user.toString ? dist.user.toString() : String(dist.user)) : null;
+      if (userId && dist.name) {
+        distributorNameMap.set(userId, dist.name);
+      }
+    });
+
+    const pharmacyNameMap = new Map();
+    pharmacies.forEach(pharm => {
+      const userId = pharm.user ? (pharm.user.toString ? pharm.user.toString() : String(pharm.user)) : null;
+      if (userId && pharm.name) {
+        pharmacyNameMap.set(userId, pharm.name);
+      }
+    });
+
+    const manufacturerNameMap = new Map();
+    manufacturers.forEach(manu => {
+      const entityId = manu._id ? (manu._id.toString ? manu._id.toString() : String(manu._id)) : null;
+      if (entityId && manu.name) {
+        manufacturerNameMap.set(entityId, manu.name);
+      }
+    });
 
     // Build journey from the information found
     const journey = [];
@@ -261,56 +344,130 @@ export class TrackDrugUseCase {
     }
 
     if (manufacturerInvoice) {
+      const fromManufacturerEntityId = manufacturerInvoice.fromManufacturer?._id?.toString() || manufacturerInvoice.fromManufacturer?.toString();
+      const toDistributorUserId = manufacturerInvoice.toDistributor?._id?.toString() || manufacturerInvoice.toDistributor?.toString();
+      
+      // fromManufacturer is PharmaCompany, has 'name' field
+      const fromName = manufacturerNameMap.get(fromManufacturerEntityId) ||
+        manufacturerInvoice.fromManufacturer?.name ||
+        "N/A";
+      
+      const toName = distributorNameMap.get(toDistributorUserId) ||
+        manufacturerInvoice.toDistributor?.fullName ||
+        manufacturerInvoice.toDistributor?.username ||
+        "N/A";
+
       journey.push({
         stage: "transfer_to_distributor",
         description: "Chuyển giao cho Nhà phân phối",
-        from:
-          manufacturerInvoice.fromManufacturer?.fullName ||
-          manufacturerInvoice.fromManufacturer?.username ||
-          "N/A",
-        to:
-          manufacturerInvoice.toDistributor?.fullName ||
-          manufacturerInvoice.toDistributor?.username ||
-          "N/A",
+        from: fromName,
+        to: toName,
         date: manufacturerInvoice.createdAt,
         invoiceNumber: manufacturerInvoice.invoiceNumber,
+        details: {
+          invoiceId: manufacturerInvoice._id?.toString(),
+          quantity: manufacturerInvoice.quantity,
+          batchNumber: manufacturerInvoice.batchNumber,
+        },
       });
     }
 
     if (proofOfDistribution) {
+      const distributorUserId = proofOfDistribution.toDistributor?._id?.toString() || proofOfDistribution.toDistributor?.toString();
+      const distributorName = distributorNameMap.get(distributorUserId) ||
+        proofOfDistribution.toDistributor?.fullName ||
+        proofOfDistribution.toDistributor?.username ||
+        "N/A";
+      
+      // fromManufacturer in proofOfDistribution is also PharmaCompany
+      const fromManufacturerEntityId = proofOfDistribution.fromManufacturer?._id?.toString() || proofOfDistribution.fromManufacturer?.toString();
+      const manufacturerName = manufacturerNameMap.get(fromManufacturerEntityId) ||
+        proofOfDistribution.fromManufacturer?.name ||
+        null;
+
       journey.push({
         stage: "distributor_received",
         description: "Nhà phân phối đã nhận hàng",
-        date:
-          proofOfDistribution.distributionDate || proofOfDistribution.createdAt,
+        distributor: distributorName,
+        from: manufacturerName || "N/A", // Add manufacturer name
+        date: proofOfDistribution.distributionDate || proofOfDistribution.createdAt,
         status: proofOfDistribution.status,
+        details: {
+          proofId: proofOfDistribution._id?.toString(),
+          receivedQuantity: proofOfDistribution.receivedQuantity,
+          batchNumber: proofOfDistribution.batchNumber,
+        },
       });
     }
 
     if (commercialInvoice) {
+      const fromDistributorUserId = commercialInvoice.fromDistributor?._id?.toString() || commercialInvoice.fromDistributor?.toString();
+      const toPharmacyUserId = commercialInvoice.toPharmacy?._id?.toString() || commercialInvoice.toPharmacy?.toString();
+      
+      const fromName = distributorNameMap.get(fromDistributorUserId) ||
+        commercialInvoice.fromDistributor?.fullName ||
+        commercialInvoice.fromDistributor?.username ||
+        "N/A";
+      
+      const toName = pharmacyNameMap.get(toPharmacyUserId) ||
+        commercialInvoice.toPharmacy?.fullName ||
+        commercialInvoice.toPharmacy?.username ||
+        "N/A";
+
+      // Get batchNumber from commercialInvoice, or fallback to related NFT or proofOfPharmacy
+      let invoiceBatchNumber = commercialInvoice.batchNumber;
+      if (!invoiceBatchNumber) {
+        // Try to get from populated nftInfo
+        if (commercialInvoice.nftInfo) {
+          invoiceBatchNumber = commercialInvoice.nftInfo.batchNumber || 
+            (typeof commercialInvoice.nftInfo === 'object' && commercialInvoice.nftInfo.batchNumber) ||
+            null;
+        }
+        // Fallback to main nft batchNumber
+        if (!invoiceBatchNumber) {
+          invoiceBatchNumber = nft.batchNumber || batchNumber;
+        }
+        // Or from proofOfPharmacy if available
+        if (!invoiceBatchNumber && proofOfPharmacy) {
+          invoiceBatchNumber = proofOfPharmacy.batchNumber;
+        }
+      }
+
       journey.push({
         stage: "transfer_to_pharmacy",
         description: "Chuyển giao cho Nhà thuốc",
-        from:
-          commercialInvoice.fromDistributor?.fullName ||
-          commercialInvoice.fromDistributor?.username ||
-          "N/A",
-        to:
-          commercialInvoice.toPharmacy?.fullName ||
-          commercialInvoice.toPharmacy?.username ||
-          "N/A",
+        from: fromName,
+        to: toName,
         date: commercialInvoice.createdAt,
         invoiceNumber: commercialInvoice.invoiceNumber,
+        details: {
+          invoiceId: commercialInvoice._id?.toString(),
+          quantity: commercialInvoice.quantity,
+          batchNumber: invoiceBatchNumber,
+          status: commercialInvoice.status,
+        },
       });
     }
 
     if (proofOfPharmacy) {
+      const pharmacyUserId = proofOfPharmacy.toPharmacy?._id?.toString() || proofOfPharmacy.toPharmacy?.toString();
+      const pharmacyName = pharmacyNameMap.get(pharmacyUserId) ||
+        proofOfPharmacy.toPharmacy?.fullName ||
+        proofOfPharmacy.toPharmacy?.username ||
+        "N/A";
+
       journey.push({
         stage: "pharmacy_received",
         description: "Nhà thuốc đã nhận hàng",
+        pharmacy: pharmacyName,
         date: proofOfPharmacy.receiptDate || proofOfPharmacy.createdAt,
         status: proofOfPharmacy.status,
         supplyChainCompleted: proofOfPharmacy.supplyChainCompleted,
+        details: {
+          receiptId: proofOfPharmacy._id?.toString(),
+          receivedQuantity: proofOfPharmacy.receivedQuantity,
+          batchNumber: proofOfPharmacy.batchNumber,
+        },
       });
     }
 
@@ -344,28 +501,42 @@ export class TrackDrugUseCase {
       journey,
       supplyChain: {
         manufacturer: manufacturerInvoice?.fromManufacturer
-          ? {
-              name:
-                manufacturerInvoice.fromManufacturer.fullName ||
-                manufacturerInvoice.fromManufacturer.username,
-              email: manufacturerInvoice.fromManufacturer.email,
-            }
+          ? (() => {
+              const entityId = manufacturerInvoice.fromManufacturer._id?.toString() || manufacturerInvoice.fromManufacturer.toString();
+              const name = manufacturerNameMap.get(entityId) ||
+                manufacturerInvoice.fromManufacturer.name ||
+                "N/A";
+              return {
+                name,
+                email: manufacturerInvoice.fromManufacturer.contactEmail || null,
+              };
+            })()
           : null,
         distributor: commercialInvoice?.fromDistributor
-          ? {
-              name:
+          ? (() => {
+              const userId = commercialInvoice.fromDistributor._id?.toString() || commercialInvoice.fromDistributor.toString();
+              const name = distributorNameMap.get(userId) ||
                 commercialInvoice.fromDistributor.fullName ||
-                commercialInvoice.fromDistributor.username,
-              email: commercialInvoice.fromDistributor.email,
-            }
+                commercialInvoice.fromDistributor.username ||
+                "N/A";
+              return {
+                name,
+                email: commercialInvoice.fromDistributor.email || null,
+              };
+            })()
           : null,
         pharmacy: commercialInvoice?.toPharmacy
-          ? {
-              name:
+          ? (() => {
+              const userId = commercialInvoice.toPharmacy._id?.toString() || commercialInvoice.toPharmacy.toString();
+              const name = pharmacyNameMap.get(userId) ||
                 commercialInvoice.toPharmacy.fullName ||
-                commercialInvoice.toPharmacy.username,
-              email: commercialInvoice.toPharmacy.email,
-            }
+                commercialInvoice.toPharmacy.username ||
+                "N/A";
+              return {
+                name,
+                email: commercialInvoice.toPharmacy.email || null,
+              };
+            })()
           : null,
       },
     };
