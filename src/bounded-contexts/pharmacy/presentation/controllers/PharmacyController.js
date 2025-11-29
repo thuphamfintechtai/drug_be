@@ -533,15 +533,157 @@ export class PharmacyController {
       const filters = {
         status: req.query.status,
         batchNumber: req.query.batchNumber,
+        search: req.query.search,
+        page: req.query.page,
+        limit: req.query.limit,
       };
 
       const result = await this._pharmacyService.getDistributionHistory(pharmacyId, filters);
 
+      // Get Business Entity names for distributors (User may not have fullName)
+      const { DistributorModel, PharmacyModel } = await import(
+        "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+      );
+
+      // Get all unique distributor User IDs from results
+      const distributorUserIds = [...new Set(
+        result.documents
+          .map(doc => doc.fromDistributor?._id?.toString() || doc.fromDistributor?.toString())
+          .filter(Boolean)
+      )];
+
+      // Query distributors to get their names
+      const distributors = distributorUserIds.length > 0
+        ? await DistributorModel.find({ user: { $in: distributorUserIds } })
+            .select("user name")
+            .lean()
+        : [];
+
+      // Create map: userId -> distributor name
+      const distributorNameMap = new Map();
+      distributors.forEach(dist => {
+        const userId = dist.user ? (dist.user.toString ? dist.user.toString() : String(dist.user)) : null;
+        if (userId && dist.name) {
+          distributorNameMap.set(userId, dist.name);
+        }
+      });
+
+      // Format response according to requirements
+      // result.documents are already populated lean() objects from repository
+      const formattedReceipts = result.documents.map(doc => {
+        // Extract fromDistributor (User object) - already populated
+        // If User doesn't have fullName, get name from Distributor entity
+        let distributorFullName = null;
+        let distributorName = null;
+        
+        if (doc.fromDistributor) {
+          const userId = doc.fromDistributor._id?.toString() || doc.fromDistributor.toString();
+          distributorFullName = doc.fromDistributor.fullName || distributorNameMap.get(userId) || null;
+          distributorName = distributorNameMap.get(userId) || doc.fromDistributor.fullName || null;
+        }
+
+        const fromDistributor = doc.fromDistributor ? {
+          _id: doc.fromDistributor._id?.toString() || doc.fromDistributor.toString(),
+          fullName: distributorFullName,
+          name: distributorName,
+          username: doc.fromDistributor.username || null,
+          email: doc.fromDistributor.email || null,
+        } : null;
+
+        // Extract drug object - already populated
+        // Drug schema has: tradeName, genericName (no commercialName or name field)
+        const drug = doc.drug ? {
+          _id: doc.drug._id?.toString() || doc.drug.toString(),
+          tradeName: doc.drug.tradeName || null,
+          commercialName: doc.drug.tradeName || null, // Use tradeName as commercialName
+          name: doc.drug.tradeName || doc.drug.genericName || null, // Use tradeName as name
+        } : null;
+
+        // Extract receivedBy (from verifiedBy User or embedded schema)
+        let receivedBy = null;
+        if (doc.verifiedBy) {
+          receivedBy = {
+            _id: doc.verifiedBy._id?.toString() || doc.verifiedBy.toString(),
+            fullName: doc.verifiedBy.fullName || null,
+            name: doc.verifiedBy.fullName || null, // User doesn't have name field, use fullName
+            username: doc.verifiedBy.username || null,
+            email: doc.verifiedBy.email || null,
+          };
+        } else if (doc.receivedBy && doc.receivedBy.name) {
+          // If receivedBy is embedded schema, format it
+          receivedBy = {
+            name: doc.receivedBy.name || null,
+            signature: doc.receivedBy.signature || null,
+            idNumber: doc.receivedBy.idNumber || null,
+            position: doc.receivedBy.position || null,
+          };
+        }
+
+        // Extract nested values (already flattened in lean() documents)
+        const receivedQuantity = doc.receivedQuantity || 0;
+        const batchNumber = doc.batchNumber || null;
+        const chainTxHash = doc.chainTxHash || null;
+        const receivedDate = doc.receiptDate || doc.createdAt;
+
+        // Extract receiptAddress
+        const receiptAddress = doc.receiptAddress ? {
+          street: doc.receiptAddress.street || null,
+          city: doc.receiptAddress.city || null,
+          state: doc.receiptAddress.state || null,
+          postalCode: doc.receiptAddress.postalCode || null,
+          country: doc.receiptAddress.country || null,
+        } : null;
+
+        // Format deliveryAddress (alias of receiptAddress)
+        const deliveryAddress = receiptAddress ? {
+          street: receiptAddress.street,
+          city: receiptAddress.city,
+        } : null;
+
+        // Map status according to requirements
+        // Schema has: pending, received, confirmed, rejected
+        // Requirements accept: pending, received, verified, completed, rejected, confirmed
+        // Map "confirmed" to "verified" for frontend compatibility
+        let status = doc.status || "pending";
+        if (status === "confirmed") {
+          status = "verified"; // Map confirmed to verified as per requirements
+        }
+
+        return {
+          _id: doc._id.toString(),
+          status,
+          receivedDate: receivedDate ? new Date(receivedDate).toISOString() : null,
+          createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
+          updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null,
+          fromDistributor,
+          drug,
+          receivedBy,
+          receivedQuantity,
+          quantity: receivedQuantity, // Alias
+          batchNumber,
+          chainTxHash,
+          transactionHash: chainTxHash, // Alias
+          receiptAddress,
+          deliveryAddress,
+          notes: doc.notes || null,
+          commercialInvoiceId: doc.commercialInvoice?._id?.toString() || doc.commercialInvoice?.toString() || doc.commercialInvoice || null,
+          proofOfDistributionId: doc.proofOfDistribution?._id?.toString() || doc.proofOfDistribution?.toString() || doc.proofOfDistribution || null,
+          nftInfoId: doc.nftInfo?._id?.toString() || doc.nftInfo?.toString() || doc.nftInfo || null,
+        };
+      });
+
       return res.status(200).json({
         success: true,
         data: {
-          receipts: result,
-          count: Array.isArray(result) ? result.length : 1,
+          receipts: formattedReceipts,
+          count: result.total,
+          total: result.total,
+          pagination: {
+            page: result.page,
+            limit: result.limit,
+            total: result.total,
+            pages: result.pages,
+          },
         },
       });
     } catch (error) {

@@ -42,16 +42,72 @@ export class ProofOfPharmacyRepository extends IProofOfPharmacyRepository {
       }
     }
 
+    // Support search functionality
+    if (filters.search) {
+      const searchRegex = { $regex: filters.search, $options: "i" };
+      const searchConditions = [
+        { batchNumber: searchRegex },
+      ];
+      
+      // Search in drug names - we'll need to find drug IDs first
+      if (filters.search) {
+        const { DrugInfoModel } = await import("../../../../supply-chain/infrastructure/persistence/mongoose/schemas/DrugInfoSchema.js");
+        const matchingDrugs = await DrugInfoModel.find({
+          $or: [
+            { tradeName: searchRegex },
+            { genericName: searchRegex },
+            { atcCode: searchRegex },
+          ],
+        }).select("_id").lean();
+        
+        if (matchingDrugs.length > 0) {
+          searchConditions.push({ drug: { $in: matchingDrugs.map(d => d._id) } });
+        }
+      }
+      
+      // Search in commercial invoice numbers
+      const { CommercialInvoiceModel } = await import("../../../../distributor/infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
+      const matchingInvoices = await CommercialInvoiceModel.find({
+        invoiceNumber: searchRegex,
+      }).select("_id").lean();
+      
+      if (matchingInvoices.length > 0) {
+        searchConditions.push({ commercialInvoice: { $in: matchingInvoices.map(inv => inv._id) } });
+      }
+      
+      if (searchConditions.length > 0) {
+        query.$or = searchConditions;
+      }
+    }
+
+    // Get total count before pagination
+    const total = await ProofOfPharmacyModel.countDocuments(query);
+
+    // Pagination
+    const page = parseInt(filters.page) || 1;
+    const limit = parseInt(filters.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const documents = await ProofOfPharmacyModel.find(query)
-      .populate("fromDistributor")
-      .populate("toPharmacy")
-      .populate("commercialInvoice")
+      .populate("fromDistributor", "fullName username email")
+      .populate("toPharmacy", "fullName username email")
+      .populate("verifiedBy", "fullName username email")
+      .populate("commercialInvoice", "invoiceNumber")
       .populate("proofOfDistribution")
       .populate("nftInfo")
-      .populate("drug")
-      .sort({ createdAt: -1 });
+      .populate("drug", "tradeName genericName")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(); // Use lean() to get plain objects for easier manipulation
 
-    return documents.map(doc => ProofOfPharmacyMapper.toDomain(doc));
+    return {
+      documents,
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+    };
   }
 
   async findByDistributor(distributorId, filters = {}) {
