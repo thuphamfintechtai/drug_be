@@ -283,7 +283,71 @@ export class DistributorApplicationService {
   }
 
   async getInvoicesFromManufacturer(distributorId, filters = {}) {
-    return await this._manufacturerInvoiceRepository.findByDistributor(distributorId, filters);
+    const invoices = await this._manufacturerInvoiceRepository.findByDistributor(distributorId, filters);
+    
+    // Get all unique manufacturer IDs and drug IDs
+    const manufacturerIds = [...new Set(invoices.map(inv => inv.fromManufacturerId).filter(Boolean))];
+    const drugIds = [...new Set(invoices.map(inv => inv.drugId).filter(Boolean))];
+
+    // Query manufacturers
+    const { PharmaCompanyModel } = await import(
+      "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+    );
+    const manufacturers = manufacturerIds.length > 0
+      ? await PharmaCompanyModel.find({ _id: { $in: manufacturerIds } }).select("_id name").lean()
+      : [];
+
+    // Query drugs
+    const { DrugInfoModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/DrugInfoSchema.js"
+    );
+    const drugs = drugIds.length > 0
+      ? await DrugInfoModel.find({ _id: { $in: drugIds } }).select("_id drugName tradeName genericName").lean()
+      : [];
+
+    // Create maps for quick lookup
+    const manufacturerMap = new Map();
+    manufacturers.forEach(m => {
+      manufacturerMap.set(m._id.toString(), m.name);
+    });
+
+    const drugMap = new Map();
+    drugs.forEach(d => {
+      const drugName = d.drugName || d.tradeName || d.genericName;
+      drugMap.set(d._id.toString(), drugName);
+    });
+
+    // Enrich invoices with manufacturer and drug names
+    return invoices.map(inv => {
+      // Create enriched object with all invoice properties
+      const enriched = {
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        fromManufacturerId: inv.fromManufacturerId,
+        toDistributorId: inv.toDistributorId,
+        drugId: inv.drugId,
+        proofOfProductionId: inv.proofOfProductionId,
+        nftInfoId: inv.nftInfoId,
+        quantity: inv.quantity,
+        unitPrice: inv.unitPrice,
+        totalAmount: inv.totalAmount,
+        vatRate: inv.vatRate,
+        vatAmount: inv.vatAmount,
+        finalAmount: inv.finalAmount,
+        notes: inv.notes,
+        status: inv.status,
+        chainTxHash: inv.chainTxHash,
+        tokenIds: inv.tokenIds,
+        invoiceDate: inv.invoiceDate,
+        batchNumber: inv.batchNumber,
+        createdAt: inv.createdAt,
+        updatedAt: inv.updatedAt,
+        // Additional enriched fields
+        manufacturerName: inv.fromManufacturerId ? (manufacturerMap.get(inv.fromManufacturerId) || null) : null,
+        drugName: inv.drugId ? (drugMap.get(inv.drugId) || null) : null,
+      };
+      return enriched;
+    });
   }
 
   async getInvoiceDetail(distributorId, invoiceId) {

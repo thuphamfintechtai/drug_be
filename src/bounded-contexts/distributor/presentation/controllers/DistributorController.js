@@ -33,17 +33,35 @@ export class DistributorController {
 
       return res.status(200).json({
         success: true,
-        data: invoices.map(inv => ({
-          id: inv.id,
-          invoiceNumber: inv.invoiceNumber,
-          manufacturerId: inv.fromManufacturerId,
-          drugId: inv.drugId,
-          quantity: inv.quantity,
-          status: inv.status,
-          chainTxHash: inv.chainTxHash,
-          tokenIds: inv.tokenIds,
-          createdAt: inv.createdAt,
-        })),
+        data: invoices.map(inv => {
+          // Handle quantity - could be value object or number
+          let quantity = inv.quantity;
+          if (quantity && typeof quantity === 'object' && quantity.value !== undefined) {
+            quantity = quantity.value;
+          }
+          
+          // Handle chainTxHash - could be value object or string
+          let chainTxHash = inv.chainTxHash;
+          if (chainTxHash && typeof chainTxHash === 'object' && chainTxHash.hash !== undefined) {
+            chainTxHash = chainTxHash.hash;
+          } else if (chainTxHash && typeof chainTxHash === 'object' && chainTxHash.toString) {
+            chainTxHash = chainTxHash.toString();
+          }
+          
+          return {
+            id: inv.id || null,
+            invoiceNumber: inv.invoiceNumber || null,
+            manufacturerId: inv.fromManufacturerId || null,
+            manufacturerName: inv.manufacturerName || null,
+            drugId: inv.drugId || null,
+            drugName: inv.drugName || null,
+            quantity: quantity || null,
+            status: inv.status || null,
+            chainTxHash: chainTxHash || null,
+            tokenIds: inv.tokenIds || [],
+            createdAt: inv.createdAt || null,
+          };
+        }),
         count: invoices.length,
       });
     } catch (error) {
