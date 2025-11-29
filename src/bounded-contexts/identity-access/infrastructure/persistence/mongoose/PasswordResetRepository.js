@@ -79,7 +79,18 @@ export class PasswordResetRepository extends IPasswordResetRepository {
     return results;
   }
 
-  async create(data) {
+  create(data) {
+    // Validate required fields
+    if (!data.userId) {
+      throw new Error("userId is required when creating password reset request");
+    }
+    if (!data.token) {
+      throw new Error("token is required when creating password reset request");
+    }
+    if (!data.expiresAt) {
+      throw new Error("expiresAt is required when creating password reset request");
+    }
+
     // Create a plain object that will be used to create domain entity
     return {
       id: null,
@@ -98,18 +109,38 @@ export class PasswordResetRepository extends IPasswordResetRepository {
   }
 
   async save(passwordReset) {
+    // Validate required fields
+    if (!passwordReset.userId) {
+      throw new Error("userId is required");
+    }
+    if (!passwordReset.token) {
+      throw new Error("token is required");
+    }
+    if (!passwordReset.expiresAt) {
+      throw new Error("expiresAt is required");
+    }
+
+    // Ensure userId is a valid ObjectId
+    let userId = passwordReset.userId;
+    if (typeof userId === 'string' && !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new Error(`Invalid userId format: ${userId}`);
+    }
+    if (typeof userId === 'string') {
+      userId = new mongoose.Types.ObjectId(userId);
+    }
+
     const document = {
-      user: passwordReset.userId,
+      user: userId,
       token: passwordReset.token,
       expiresAt: passwordReset.expiresAt,
       used: passwordReset.used || false,
-      ipAddress: passwordReset.ipAddress,
-      userAgent: passwordReset.userAgent,
-      verificationInfo: passwordReset.verificationInfo,
+      ipAddress: passwordReset.ipAddress || null,
+      userAgent: passwordReset.userAgent || null,
+      verificationInfo: passwordReset.verificationInfo || null,
       status: passwordReset.status || "pending",
-      reviewedBy: passwordReset.reviewedBy,
-      reviewedAt: passwordReset.reviewedAt,
-      newPassword: passwordReset.newPassword,
+      reviewedBy: passwordReset.reviewedBy || null,
+      reviewedAt: passwordReset.reviewedAt || null,
+      newPassword: passwordReset.newPassword || null,
     };
 
     const isObjectId = passwordReset.id && passwordReset.id.length === 24 && /^[0-9a-fA-F]{24}$/.test(passwordReset.id);

@@ -18,7 +18,7 @@ export class IPasswordResetRepository {
     throw new Error("Method findAll() must be implemented");
   }
 
-  async create(data) {
+  create(data) {
     throw new Error("Method create() must be implemented");
   }
 

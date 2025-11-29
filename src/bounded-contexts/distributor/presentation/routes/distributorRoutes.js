@@ -1001,6 +1001,136 @@ export const createDistributorRoutes = (distributorController) => {
 
   /**
    * @swagger
+   * /api/distributor/pharmacies/available:
+   *   get:
+   *     summary: Lấy danh sách nhà thuốc (chưa có hợp đồng hoặc đã ký hợp đồng)
+   *     tags: [Distributor]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: signed
+   *         schema:
+   *           type: string
+   *           enum: [true, false]
+   *           default: false
+   *         description: 'true để lấy nhà thuốc đã ký hợp đồng, false hoặc không có để lấy nhà thuốc chưa có hợp đồng'
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *         description: Số trang
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 10
+   *         description: Số lượng mỗi trang
+   *       - in: query
+   *         name: status
+   *         schema:
+   *           type: string
+   *           enum: [active, inactive]
+   *         description: Lọc theo trạng thái
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *         description: Tìm kiếm theo tên, mã giấy phép hoặc mã số thuế
+   *     responses:
+   *       200:
+   *         description: Danh sách nhà thuốc
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 message:
+   *                   type: string
+   *                   example: "Lấy danh sách pharmacies chưa có hợp đồng thành công"
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     pharmacies:
+   *                       type: array
+   *                       items:
+   *                         type: object
+   *                         properties:
+   *                           _id:
+   *                             type: string
+   *                             description: ID của pharmacy
+   *                           user:
+   *                             type: object
+   *                             description: Thông tin user của pharmacy
+   *                             properties:
+   *                               _id:
+   *                                 type: string
+   *                               username:
+   *                                 type: string
+   *                               email:
+   *                                 type: string
+   *                               fullName:
+   *                                 type: string
+   *                               walletAddress:
+   *                                 type: string
+   *                           name:
+   *                             type: string
+   *                             description: Tên nhà thuốc
+   *                           licenseNo:
+   *                             type: string
+   *                             description: Số giấy phép
+   *                           taxCode:
+   *                             type: string
+   *                             description: Mã số thuế
+   *                           contactEmail:
+   *                             type: string
+   *                             description: Email liên hệ
+   *                           contactPhone:
+   *                             type: string
+   *                             description: Số điện thoại liên hệ
+   *                           walletAddress:
+   *                             type: string
+   *                             description: Địa chỉ ví blockchain
+   *                           status:
+   *                             type: string
+   *                             enum: [active, inactive, suspended]
+   *                             description: Trạng thái
+   *                           createdAt:
+   *                             type: string
+   *                             format: date-time
+   *                           updatedAt:
+   *                             type: string
+   *                             format: date-time
+   *                     pagination:
+   *                       type: object
+   *                       properties:
+   *                         total:
+   *                           type: integer
+   *                           description: Tổng số nhà thuốc
+   *                         page:
+   *                           type: integer
+   *                           description: Trang hiện tại
+   *                         limit:
+   *                           type: integer
+   *                           description: Số lượng mỗi trang
+   *                         totalPages:
+   *                           type: integer
+   *                           description: Tổng số trang
+   *       403:
+   *         description: Không có quyền truy cập
+   *       500:
+   *         description: Lỗi server
+   */
+  router.get("/pharmacies/available", (req, res) =>
+    distributorController.getAvailablePharmacies(req, res)
+  );
+
+  /**
+   * @swagger
    * /api/distributor/contracts/create:
    *   post:
    *     summary: Tạo yêu cầu hợp đồng với nhà thuốc
@@ -1044,15 +1174,65 @@ export const createDistributorRoutes = (distributorController) => {
    *             type: object
    *             required:
    *               - contractId
-   *               - transactionHash
+   *               - pharmacyAddress
    *             properties:
    *               contractId:
    *                 type: string
+   *                 description: ID của contract
+   *                 example: "507f1f77bcf86cd799439011"
+   *               pharmacyAddress:
+   *                 type: string
+   *                 description: Địa chỉ ví của pharmacy
+   *                 example: "0x70593a19a1090c30f107e757312241f3f44458d1"
+   *               tokenId:
+   *                 type: number
+   *                 description: Token ID của NFT (nếu có, sẽ ưu tiên dùng giá trị này thay vì từ blockchain)
+   *                 example: 12345
    *               transactionHash:
    *                 type: string
+   *                 description: Transaction hash từ blockchain (nếu có, sẽ ưu tiên dùng giá trị này)
+   *                 example: "0x9e2faa1b4f5931c2ba18770b635409534bce439b74383cd44a246e4c0ece06aa"
+   *               distributorPrivateKey:
+   *                 type: string
+   *                 description: Private key của distributor để ký transaction (optional)
    *     responses:
    *       200:
    *         description: Hoàn tất hợp đồng thành công
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 message:
+   *                   type: string
+   *                   example: "Contract đã được ký và NFT đã được mint thành công."
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     contractId:
+   *                       type: string
+   *                     status:
+   *                       type: string
+   *                       example: "signed"
+   *                     tokenId:
+   *                       type: number
+   *                       description: Token ID đã được lưu vào database
+   *                     blockchainTxHash:
+   *                       type: string
+   *                     distributorSignedAt:
+   *                       type: string
+   *                       format: date-time
+   *       400:
+   *         description: Lỗi validation hoặc trạng thái contract không hợp lệ
+   *       403:
+   *         description: Không có quyền truy cập
+   *       404:
+   *         description: Không tìm thấy contract
+   *       500:
+   *         description: Lỗi server
    */
   router.post("/contracts/finalize-and-mint", (req, res) =>
     distributorController.finalizeContractAndMint(req, res)

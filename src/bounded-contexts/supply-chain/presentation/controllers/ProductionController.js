@@ -483,7 +483,7 @@ export class ProductionController {
       const finalInvoice = updatedInvoice || invoice;
       const chainTxHashValue = finalInvoice.chainTxHash ? 
         (finalInvoice.chainTxHash.value || finalInvoice.chainTxHash) : null;
-      
+
       return res.status(200).json({
         success: true,
         message: "Lưu transaction thành công",

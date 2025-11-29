@@ -633,6 +633,95 @@ export class DistributorApplicationService {
     };
   }
 
+  async getAvailablePharmacies(distributorId, filters = {}) {
+    const { PharmacyModel, DistributorModel } = await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js");
+    const { DistributorPharmacyContractModel } = await import("../../infrastructure/persistence/mongoose/schemas/DistributorPharmacyContractSchema.js");
+    
+    // Tìm distributor entity từ user ID
+    let distributorEntity = await DistributorModel.findOne({ user: distributorId }).lean();
+    if (!distributorEntity) {
+      // Nếu không tìm thấy, thử tìm theo _id (có thể distributorId là entity ID)
+      distributorEntity = await DistributorModel.findById(distributorId).lean();
+    }
+    
+    if (!distributorEntity) {
+      throw new Error("Distributor không tồn tại");
+    }
+    
+    const distributorEntityId = distributorEntity._id.toString();
+    
+    // Kiểm tra xem user muốn lấy pharmacy chưa có hợp đồng hay đã có hợp đồng đã ký
+    const signed = filters.signed === "true" || filters.signed === true;
+    
+    // Lấy tất cả contract của distributor
+    const contractQuery = {
+      distributor: { $in: [distributorEntityId, distributorId] }
+    };
+    
+    // Nếu muốn lấy pharmacy đã ký hợp đồng, chỉ lấy contract có status = "signed"
+    if (signed) {
+      contractQuery.status = "signed";
+    }
+    
+    const contracts = await DistributorPharmacyContractModel.find(contractQuery).lean();
+    
+    // Lấy danh sách pharmacy IDs từ contracts
+    const contractedPharmacyIds = contracts
+      .map(contract => {
+        if (!contract.pharmacy) return null;
+        // pharmacy có thể là ObjectId hoặc đã được populate
+        return contract.pharmacy._id ? contract.pharmacy._id.toString() : contract.pharmacy.toString();
+      })
+      .filter(Boolean);
+    
+    // Query pharmacies
+    const query = { status: filters.status || "active" };
+    
+    if (signed) {
+      // Nếu muốn lấy pharmacy đã ký hợp đồng: chỉ lấy những pharmacy có trong contractedPharmacyIds
+      if (contractedPharmacyIds.length > 0) {
+        query._id = { $in: contractedPharmacyIds };
+      } else {
+        // Nếu không có contract nào đã ký, trả về mảng rỗng
+        query._id = { $in: [] };
+      }
+    } else {
+      // Nếu muốn lấy pharmacy chưa có hợp đồng: loại trừ những pharmacy đã có contract
+      if (contractedPharmacyIds.length > 0) {
+        query._id = { $nin: contractedPharmacyIds };
+      }
+    }
+    
+    if (filters.search) {
+      query.$or = [
+        { name: { $regex: filters.search, $options: "i" } },
+        { licenseNo: { $regex: filters.search, $options: "i" } },
+        { taxCode: { $regex: filters.search, $options: "i" } },
+      ];
+    }
+
+    const page = parseInt(filters.page) || 1;
+    const limit = parseInt(filters.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const pharmacies = await PharmacyModel.find(query)
+      .populate("user", "username email fullName walletAddress")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await PharmacyModel.countDocuments(query);
+
+    return {
+      pharmacies,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async getChartOneWeek(distributorId) {
     const DateHelper = (
       await import("../../../../shared-kernel/utils/DateHelper.js")

@@ -471,6 +471,117 @@ export class TrackDrugUseCase {
       });
     }
 
+    // Resolve currentOwner - owner can be User ID or Business Entity ID
+    let currentOwner = null;
+    
+    // First, try to get from nft.owner field
+    if (nft.owner) {
+      // Check if owner is populated User object
+      if (nft.owner._id || nft.owner.username) {
+        // Owner is a User
+        const ownerUserId = nft.owner._id?.toString() || nft.owner.toString();
+        const businessName = distributorNameMap.get(ownerUserId) || 
+                           pharmacyNameMap.get(ownerUserId) || 
+                           null;
+        
+        currentOwner = {
+          _id: ownerUserId,
+          username: nft.owner.username || null,
+          fullName: nft.owner.fullName || businessName || null,
+          name: businessName || nft.owner.fullName || nft.owner.username || null,
+          email: nft.owner.email || null,
+          walletAddress: nft.owner.walletAddress || null,
+        };
+      } else {
+        // Owner might be a Business Entity ID (ObjectId string)
+        const ownerId = nft.owner.toString ? nft.owner.toString() : String(nft.owner);
+        
+        // Try to find in manufacturerNameMap (PharmaCompany)
+        if (manufacturerNameMap.has(ownerId)) {
+          currentOwner = {
+            _id: ownerId,
+            name: manufacturerNameMap.get(ownerId),
+            type: "pharma_company",
+          };
+        } else {
+          // Try to query Business Entities to find the owner
+          const { PharmaCompanyModel, DistributorModel, PharmacyModel } = await import(
+            "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+          );
+          
+          const mongoose = await import("mongoose");
+          if (mongoose.default.Types.ObjectId.isValid(ownerId)) {
+            // Try PharmaCompany
+            const pharmaCompany = await PharmaCompanyModel.findById(ownerId).select("name user").lean();
+            if (pharmaCompany) {
+              currentOwner = {
+                _id: ownerId,
+                name: pharmaCompany.name || null,
+                type: "pharma_company",
+              };
+            } else {
+              // Try Distributor
+              const distributor = await DistributorModel.findById(ownerId).select("name user").lean();
+              if (distributor) {
+                currentOwner = {
+                  _id: ownerId,
+                  name: distributor.name || null,
+                  type: "distributor",
+                };
+              } else {
+                // Try Pharmacy
+                const pharmacy = await PharmacyModel.findById(ownerId).select("name user").lean();
+                if (pharmacy) {
+                  currentOwner = {
+                    _id: ownerId,
+                    name: pharmacy.name || null,
+                    type: "pharmacy",
+                  };
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // If owner is still null, try to infer from journey (last step in supply chain)
+    if (!currentOwner && proofOfPharmacy) {
+      // If pharmacy received, owner is likely the pharmacy
+      const toPharmacyUserId = proofOfPharmacy.toPharmacy?._id?.toString() || proofOfPharmacy.toPharmacy?.toString();
+      if (toPharmacyUserId) {
+        const pharmacyName = pharmacyNameMap.get(toPharmacyUserId) || 
+                           proofOfPharmacy.toPharmacy?.fullName || 
+                           proofOfPharmacy.toPharmacy?.username || 
+                           null;
+        
+        currentOwner = {
+          _id: toPharmacyUserId,
+          username: proofOfPharmacy.toPharmacy?.username || null,
+          fullName: proofOfPharmacy.toPharmacy?.fullName || pharmacyName || null,
+          name: pharmacyName || proofOfPharmacy.toPharmacy?.fullName || proofOfPharmacy.toPharmacy?.username || null,
+          email: proofOfPharmacy.toPharmacy?.email || null,
+        };
+      }
+    } else if (!currentOwner && proofOfDistribution) {
+      // If distributor received but not pharmacy, owner is likely the distributor
+      const toDistributorUserId = proofOfDistribution.toDistributor?._id?.toString() || proofOfDistribution.toDistributor?.toString();
+      if (toDistributorUserId) {
+        const distributorName = distributorNameMap.get(toDistributorUserId) || 
+                               proofOfDistribution.toDistributor?.fullName || 
+                               proofOfDistribution.toDistributor?.username || 
+                               null;
+        
+        currentOwner = {
+          _id: toDistributorUserId,
+          username: proofOfDistribution.toDistributor?.username || null,
+          fullName: proofOfDistribution.toDistributor?.fullName || distributorName || null,
+          name: distributorName || proofOfDistribution.toDistributor?.fullName || proofOfDistribution.toDistributor?.username || null,
+          email: proofOfDistribution.toDistributor?.email || null,
+        };
+      }
+    }
+
     // Basic NFT info (public info)
     const nftInfo = {
       tokenId: nft.tokenId,
@@ -487,12 +598,7 @@ export class TrackDrugUseCase {
       mfgDate: nft.mfgDate,
       expDate: nft.expDate,
       status: nft.status,
-      currentOwner: nft.owner
-        ? {
-            username: nft.owner.username,
-            fullName: nft.owner.fullName,
-          }
-        : null,
+      currentOwner: currentOwner,
     };
 
     return {

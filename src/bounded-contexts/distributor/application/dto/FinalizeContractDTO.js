@@ -8,7 +8,9 @@ export class FinalizeContractDTO {
 
   static fromRequest(req) {
     const { contractId, pharmacyAddress, tokenId, transactionHash } = req.body;
-    return new FinalizeContractDTO(contractId, pharmacyAddress, tokenId, transactionHash);
+    // Parse tokenId thành number nếu có
+    const parsedTokenId = tokenId !== undefined && tokenId !== null ? parseInt(tokenId, 10) : null;
+    return new FinalizeContractDTO(contractId, pharmacyAddress, parsedTokenId, transactionHash);
   }
 
   validate() {

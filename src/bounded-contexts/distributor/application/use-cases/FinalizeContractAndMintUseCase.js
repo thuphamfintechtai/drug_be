@@ -27,8 +27,39 @@ export class FinalizeContractAndMintUseCase {
       throw new Error("Bạn không có quyền finalize contract này");
     }
 
+    // Nếu contract đã signed, chỉ update tokenId và transactionHash
+    if (contract.status === ContractStatus.SIGNED) {
+      const tokenId = dto.tokenId ?? null;
+      const transactionHash = dto.transactionHash ?? null;
+
+      if (tokenId !== null || transactionHash !== null) {
+        contract.updateTokenId(tokenId, transactionHash);
+        await this._contractRepository.save(contract);
+
+        return {
+          contractId: contract.id,
+          status: contract.status,
+          tokenId: contract.tokenId,
+          blockchainTxHash: contract.blockchainTxHash,
+          distributorSignedAt: contract.distributorSignedAt,
+          message: "TokenId và transactionHash đã được cập nhật thành công.",
+        };
+      } else {
+        // Contract đã signed và không có tokenId/transactionHash mới
+        return {
+          contractId: contract.id,
+          status: contract.status,
+          tokenId: contract.tokenId,
+          blockchainTxHash: contract.blockchainTxHash,
+          distributorSignedAt: contract.distributorSignedAt,
+          message: "Contract đã được ký trước đó.",
+        };
+      }
+    }
+
+    // Contract phải ở trạng thái APPROVED để finalize
     if (contract.status !== ContractStatus.APPROVED) {
-      throw new Error(`Không thể finalize contract với trạng thái ${contract.status}. Phải là APPROVED`);
+      throw new Error(`Không thể finalize contract với trạng thái ${contract.status}. Phải là APPROVED hoặc SIGNED`);
     }
 
     // Nếu có private key => gọi blockchain
@@ -40,14 +71,18 @@ export class FinalizeContractAndMintUseCase {
             dto.pharmacyAddress
           );
 
-        if (!blockchainResult.tokenId) {
-          throw new Error("Không nhận được tokenId từ blockchain");
+        // Ưu tiên dùng tokenId từ request body nếu có, nếu không thì dùng từ blockchain
+        const finalTokenId = dto.tokenId || blockchainResult.tokenId;
+        const finalTransactionHash = dto.transactionHash || blockchainResult.transactionHash;
+
+        if (!finalTokenId) {
+          throw new Error("Không nhận được tokenId từ blockchain hoặc request body");
         }
 
         // Cập nhật contract trong database
         contract.finalizeByDistributor(
-          blockchainResult.tokenId,
-          blockchainResult.transactionHash
+          finalTokenId,
+          finalTransactionHash
         );
         await this._contractRepository.save(contract);
 
