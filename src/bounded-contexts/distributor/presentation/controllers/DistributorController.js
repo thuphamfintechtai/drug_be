@@ -180,7 +180,7 @@ export class DistributorController {
   async confirmReceipt(req, res) {
     try {
       const dto = ConfirmReceiptDTO.fromRequest(req);
-      const distributorId = req.user?._id?.toString();
+      const distributorId = req.user?.id || req.user?._id?.toString();
 
       if (!distributorId) {
         return res.status(403).json({

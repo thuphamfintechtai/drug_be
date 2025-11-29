@@ -83,18 +83,6 @@ export class ConfirmReceiptUseCase {
       }
     }
 
-    console.log("Distributor confirm:", {
-      distributorId,
-      normalizedDistributorId,
-      invoiceDistributorId: invoice.toDistributorId,
-      normalizedInvoiceDistributorId,
-      nftOwners: nfts.map(nft => ({ 
-        tokenId: nft.tokenId, 
-        ownerId: nft.ownerId,
-        normalizedOwnerId: normalizeId(nft.ownerId)
-      })),
-    });
-
     // Check NFT ownership - normalize both sides for comparison
     const unauthorizedNFTs = nfts.filter(nft => {
       const normalizedNftOwnerId = normalizeId(nft.ownerId);

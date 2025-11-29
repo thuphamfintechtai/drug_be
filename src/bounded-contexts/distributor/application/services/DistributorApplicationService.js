@@ -287,14 +287,34 @@ export class DistributorApplicationService {
   }
 
   async getInvoiceDetail(distributorId, invoiceId) {
-    const invoice = await this._manufacturerInvoiceRepository.findById(invoiceId);
+    // Get invoice with populated data directly from model
+    const { ManufacturerInvoiceModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
+    const mongoose = (await import("mongoose")).default;
     
-    if (!invoice) {
+    let invoiceDocument = null;
+    if (mongoose.Types.ObjectId.isValid(invoiceId)) {
+      invoiceDocument = await ManufacturerInvoiceModel.findById(invoiceId)
+        .populate("fromManufacturer", "name licenseNo taxCode")
+        .populate("drug", "drugName tradeName genericName")
+        .lean();
+    }
+
+    if (!invoiceDocument) {
       throw new Error("Không tìm thấy invoice");
     }
 
-    if (invoice.toDistributorId !== distributorId) {
+    // Check if invoice belongs to this distributor
+    const invoiceDistributorId = invoiceDocument.toDistributor?.toString() || invoiceDocument.toDistributor;
+    if (invoiceDistributorId !== distributorId) {
       throw new Error("Bạn không có quyền xem invoice này");
+    }
+
+    // Get invoice domain object for other data
+    const invoice = await this._manufacturerInvoiceRepository.findById(invoiceId);
+    if (!invoice) {
+      throw new Error("Không tìm thấy invoice");
     }
 
     // Get tokenIds from NFTs
@@ -307,10 +327,61 @@ export class DistributorApplicationService {
       }
     }
 
-    return {
-      ...invoice,
-      tokenIds,
+    // Get drug information from populated data or query
+    let drugName = null;
+    if (invoiceDocument.drug) {
+      drugName = invoiceDocument.drug.drugName || invoiceDocument.drug.tradeName || invoiceDocument.drug.genericName;
+    } else if (invoice.drugId) {
+      const drugInfo = await this._drugInfoRepository.findById(invoice.drugId);
+      if (drugInfo) {
+        drugName = drugInfo.drugName;
+      }
+    }
+
+    // Get manufacturer information from populated data
+    let manufacturerName = null;
+    if (invoiceDocument.fromManufacturer) {
+      manufacturerName = invoiceDocument.fromManufacturer.name;
+    } else if (invoice.fromManufacturerId) {
+      // Fallback: query if not populated
+      const { PharmaCompanyModel } = await import(
+        "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+      );
+      const manufacturerInfo = await PharmaCompanyModel.findById(invoice.fromManufacturerId).lean();
+      if (manufacturerInfo) {
+        manufacturerName = manufacturerInfo.name;
+      }
+    }
+
+    // Convert invoice to plain object
+    const invoiceData = {
+      id: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      fromManufacturerId: invoice.fromManufacturerId,
+      toDistributorId: invoice.toDistributorId,
+      drugId: invoice.drugId,
+      proofOfProductionId: invoice.proofOfProductionId,
+      nftInfoId: invoice.nftInfoId,
+      quantity: invoice.quantity?.value || invoice.quantity,
+      unitPrice: invoice.unitPrice?.value || invoice.unitPrice,
+      totalAmount: invoice.totalAmount?.value || invoice.totalAmount,
+      vatRate: invoice.vatRate,
+      vatAmount: invoice.vatAmount?.value || invoice.vatAmount,
+      finalAmount: invoice.finalAmount?.value || invoice.finalAmount,
+      notes: invoice.notes,
+      status: invoice.status,
+      chainTxHash: invoice.chainTxHash?.hash || invoice.chainTxHash,
+      tokenIds: tokenIds,
+      invoiceDate: invoice.invoiceDate,
+      batchNumber: invoice.batchNumber,
+      createdAt: invoice.createdAt,
+      updatedAt: invoice.updatedAt,
+      // Additional information
+      drugName: drugName,
+      manufacturerName: manufacturerName,
     };
+
+    return invoiceData;
   }
 
   async getDistributionHistory(distributorId, filters = {}) {
