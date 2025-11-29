@@ -8,11 +8,13 @@ export class TransferToPharmacyUseCase {
     drugInfoRepository,
     nftRepository,
     commercialInvoiceRepository,
+    manufacturerInvoiceRepository,
     eventBus
   ) {
     this._drugInfoRepository = drugInfoRepository;
     this._nftRepository = nftRepository;
     this._commercialInvoiceRepository = commercialInvoiceRepository;
+    this._manufacturerInvoiceRepository = manufacturerInvoiceRepository;
     this._eventBus = eventBus;
   }
 
@@ -20,7 +22,8 @@ export class TransferToPharmacyUseCase {
     distributorId,
     pharmacyId,
     drugId,
-    tokenIds,
+    amount,
+    tokenIds = null,
     invoiceNumber = null,
     invoiceDate = null,
     quantity = null,
@@ -31,85 +34,147 @@ export class TransferToPharmacyUseCase {
     finalAmount = null,
     notes = null
   ) {
-    // Validate tokenIds is array and not empty
-    if (!Array.isArray(tokenIds) || tokenIds.length === 0) {
-      throw new Error("tokenIds phải là array không rỗng");
-    }
-
-    // Check for duplicate tokenIds
-    const uniqueTokenIds = [...new Set(tokenIds)];
-    if (uniqueTokenIds.length !== tokenIds.length) {
-      throw new Error("tokenIds không được chứa giá trị trùng lặp");
-    }
-
     // Check drug exists
     const drug = await this._drugInfoRepository.findById(drugId);
     if (!drug) {
       throw new DrugNotFoundException(`Thuốc với ID ${drugId} không tồn tại`);
     }
 
-    // Check NFTs exist and belong to distributor
-    const nfts = await this._nftRepository.findByTokenIds(tokenIds);
-    if (nfts.length !== tokenIds.length) {
+    let selectedTokenIds = [];
+
+    // Nếu FE gửi tokenIds, dùng tokenIds đó; nếu không, tự động chọn theo index
+    if (tokenIds && Array.isArray(tokenIds) && tokenIds.length > 0) {
+      // FE đã gửi tokenIds, dùng tokenIds đó
+      selectedTokenIds = tokenIds.map(id => String(id).trim());
+      
+      // Validate amount phải bằng số lượng tokenIds
+      if (amount && amount !== selectedTokenIds.length) {
+        throw new Error(`amount (${amount}) phải bằng số lượng tokenIds (${selectedTokenIds.length})`);
+      }
+      
+      // Set amount = số lượng tokenIds nếu không có
+      if (!amount) {
+        amount = selectedTokenIds.length;
+      }
+    } else {
+      // FE không gửi tokenIds, tự động chọn theo index
+      if (!amount || amount <= 0 || !Number.isInteger(amount)) {
+        throw new Error("amount phải là số nguyên dương (hoặc cung cấp tokenIds)");
+      }
+
+      // Query manufacturerInvoice để lấy tất cả tokenIds mà distributor đã nhận từ manufacturer
+      const manufacturerInvoices = await this._manufacturerInvoiceRepository.findByDistributor(distributorId, {
+        status: "sent" // Chỉ lấy các invoice đã được gửi (NFTs đã được transfer)
+      });
+
+      // Lọc theo drugId và gộp tất cả tokenIds lại
+      // Lưu ý: Cần sort invoices theo createdAt để đảm bảo thứ tự đúng (invoice cũ trước, mới sau)
+      const allTokenIds = [];
+      for (const invoice of manufacturerInvoices) {
+        const normalizedInvoiceDrugId = invoice.drugId ? String(invoice.drugId).trim() : null;
+        const normalizedDrugId = drugId ? String(drugId).trim() : null;
+        
+        if (normalizedInvoiceDrugId === normalizedDrugId && invoice.tokenIds && Array.isArray(invoice.tokenIds)) {
+          // Sort tokenIds trong mỗi invoice trước khi thêm vào allTokenIds
+          const sortedInvoiceTokenIds = invoice.tokenIds.map(id => String(id).trim()).sort((a, b) => {
+            const numA = parseInt(a, 10);
+            const numB = parseInt(b, 10);
+            if (isNaN(numA) || isNaN(numB)) {
+              return a.localeCompare(b);
+            }
+            return numA - numB;
+          });
+          allTokenIds.push(...sortedInvoiceTokenIds);
+        }
+      }
+
+      // Loại bỏ duplicate tokenIds (nếu có) - giữ lại tokenId đầu tiên xuất hiện
+      const seenTokenIds = new Set();
+      const uniqueTokenIds = [];
+      for (const tokenId of allTokenIds) {
+        if (!seenTokenIds.has(tokenId)) {
+          seenTokenIds.add(tokenId);
+          uniqueTokenIds.push(tokenId);
+        }
+      }
+      
+      // Sort lại toàn bộ tokenIds theo số để đảm bảo thứ tự đúng (không sort theo string)
+      uniqueTokenIds.sort((a, b) => {
+        const numA = parseInt(a, 10);
+        const numB = parseInt(b, 10);
+        if (isNaN(numA) || isNaN(numB)) {
+          // Nếu không phải số, sort theo string
+          return a.localeCompare(b);
+        }
+        return numA - numB;
+      });
+
+      if (uniqueTokenIds.length === 0) {
+        throw new Error(`Distributor chưa nhận NFT nào từ manufacturer cho drug ${drugId}`);
+      }
+
+      // Query commercialInvoice để tính số lượng tokenIds đã chuyển cho pharmacy này
+      const transferredCount = await this._commercialInvoiceRepository.countTransferredTokenIds(
+        distributorId,
+        pharmacyId,
+        drugId
+      );
+
+      // Tính index bắt đầu
+      const startIndex = transferredCount;
+      const endIndex = startIndex + amount;
+
+      // Kiểm tra xem có đủ NFT để chuyển không
+      if (endIndex > uniqueTokenIds.length) {
+        const available = uniqueTokenIds.length - startIndex;
+        throw new Error(
+          `Không đủ NFT để chuyển. ` +
+          `Đã chuyển: ${transferredCount}, ` +
+          `Tổng số NFT nhận được: ${uniqueTokenIds.length}, ` +
+          `Còn lại: ${available}, ` +
+          `Yêu cầu: ${amount}`
+        );
+      }
+
+      // Lấy amount NFT tiếp theo từ mảng tokenIds (theo index)
+      selectedTokenIds = uniqueTokenIds.slice(startIndex, endIndex);
+      
+      console.log("TransferToPharmacy - Auto TokenIds selection:", {
+        distributorId,
+        pharmacyId,
+        drugId,
+        amount,
+        totalReceived: uniqueTokenIds.length,
+        transferredCount,
+        startIndex,
+        endIndex,
+        selectedTokenIds,
+      });
+    }
+
+    // Validate NFTs exist and belong to distributor
+    const nfts = await this._nftRepository.findByTokenIds(selectedTokenIds);
+    if (nfts.length !== selectedTokenIds.length) {
       const foundTokenIds = nfts.map(nft => nft.tokenId);
-      const missingTokenIds = tokenIds.filter(tid => !foundTokenIds.includes(tid));
+      const missingTokenIds = selectedTokenIds.filter(tid => !foundTokenIds.includes(String(tid)));
       throw new Error(`Không tìm thấy một số tokenId: ${missingTokenIds.join(", ")}`);
     }
 
     // Normalize distributorId to string for comparison
     const normalizedDistributorId = distributorId ? String(distributorId).trim() : null;
 
-    // Check if NFTs have already been transferred (possibly by blockchain event)
-    const alreadyTransferredNFTs = [];
+    // Validate all NFTs belong to distributor and can be transferred
     for (const nft of nfts) {
       // Normalize ownerId to string for comparison
       const normalizedOwnerId = nft.ownerId ? String(nft.ownerId).trim() : null;
       
       if (normalizedOwnerId !== normalizedDistributorId) {
-        // NFT has been transferred - check if there's an existing invoice
-        alreadyTransferredNFTs.push({
-          tokenId: nft.tokenId,
-          currentOwner: normalizedOwnerId,
-          status: nft.status
-        });
+        throw new Error(
+          `NFT với tokenId ${nft.tokenId} không thuộc về distributor. ` +
+          `Owner hiện tại: ${normalizedOwnerId || 'null'}, ` +
+          `Distributor ID: ${normalizedDistributorId || 'null'}`
+        );
       }
-    }
-
-    // If some NFTs have been transferred, check for existing invoice
-    if (alreadyTransferredNFTs.length > 0) {
-      // Try to find existing invoice with these tokenIds
-      const existingInvoices = await this._commercialInvoiceRepository.findByDistributor(distributorId, {});
-      const matchingInvoice = existingInvoices.find(inv => {
-        const invoiceTokenIds = (inv.tokenIds || []).map(id => String(id).trim());
-        const requestTokenIds = tokenIds.map(id => String(id).trim());
-        return requestTokenIds.every(tid => invoiceTokenIds.includes(tid));
-      });
-
-      if (matchingInvoice) {
-        // Return existing invoice (idempotency)
-        return {
-          invoiceId: matchingInvoice.id,
-          invoiceNumber: matchingInvoice.invoiceNumber,
-          status: matchingInvoice.status,
-          tokenIds: matchingInvoice.tokenIds,
-          quantity: matchingInvoice.quantity,
-          createdAt: matchingInvoice.createdAt,
-          message: "Invoice đã tồn tại cho các tokenIds này (có thể đã được tạo bởi blockchain event)"
-        };
-      }
-
-      // NFT has been transferred but no invoice found
-      const transferredTokenIds = alreadyTransferredNFTs.map(nft => nft.tokenId).join(", ");
-      throw new Error(
-        `Các NFT sau đã được transfer (có thể bởi blockchain event): ${transferredTokenIds}. ` +
-        `Owner hiện tại của NFT đầu tiên: ${alreadyTransferredNFTs[0].currentOwner || 'null'}, ` +
-        `Distributor ID: ${normalizedDistributorId || 'null'}. ` +
-        `Vui lòng kiểm tra lại hoặc đợi blockchain event xử lý xong trước khi tạo invoice.`
-      );
-    }
-
-    // Validate all NFTs belong to distributor and can be transferred
-    for (const nft of nfts) { 
 
       if (!nft.canBeTransferred()) {
         throw new Error(`NFT với tokenId ${nft.tokenId} không thể chuyển giao (status: ${nft.status})`);
@@ -125,11 +190,11 @@ export class TransferToPharmacyUseCase {
     }
 
     // Calculate quantity if not provided
-    const calculatedQuantity = quantity || nfts.length;
+    const calculatedQuantity = quantity || amount;
 
-    // Validate quantity matches tokenIds length if provided
-    if (quantity !== null && quantity !== undefined && quantity !== nfts.length) {
-      throw new Error(`quantity (${quantity}) phải bằng số lượng tokenIds (${nfts.length})`);
+    // Validate quantity matches amount if provided
+    if (quantity !== null && quantity !== undefined && quantity !== amount) {
+      throw new Error(`quantity (${quantity}) phải bằng amount (${amount})`);
     }
 
     // Get nftInfoId from first NFT
@@ -148,11 +213,12 @@ export class TransferToPharmacyUseCase {
       
       await session.withTransaction(async () => {
         // Check for existing invoice WITHIN transaction to prevent race condition
+        // Check bằng cách so sánh tokenIds
         const existingInvoice = await this._commercialInvoiceRepository.findByTokenIds(
           distributorId,
           pharmacyId,
           drugId,
-          tokenIds
+          selectedTokenIds
         );
 
         // Chỉ return invoice cũ nếu nó ở trạng thái draft hoặc issued (chưa sent)
@@ -169,7 +235,7 @@ export class TransferToPharmacyUseCase {
           drugId,
           finalInvoiceNumber,
           calculatedQuantity,
-          tokenIds,
+          selectedTokenIds,
           invoiceDate,
           null, // proofOfPharmacyId - will be set later
           nftInfoId,
@@ -194,7 +260,7 @@ export class TransferToPharmacyUseCase {
         if (checkInvoice && (checkInvoice.status === "draft" || checkInvoice.status === "issued")) {
           // This might be an existing invoice, double check by tokenIds
           const invoiceTokenIds = (checkInvoice.tokenIds || []).map(id => String(id).trim()).sort();
-          const requestTokenIds = tokenIds.map(id => String(id).trim()).sort();
+          const requestTokenIds = selectedTokenIds.map(id => String(id).trim()).sort();
           
           if (invoiceTokenIds.length === requestTokenIds.length &&
               invoiceTokenIds.every((tid, idx) => tid === requestTokenIds[idx])) {
@@ -230,21 +296,6 @@ export class TransferToPharmacyUseCase {
     } finally {
       await session.endSession();
     }
-
-    // Publish domain events
-    invoice.domainEvents.forEach(event => {
-      this._eventBus.publish(event);
-    });
-
-    // Return saved invoice with ObjectId from database (not UUID from domain entity)
-    return {
-      invoiceId: savedInvoice.id, // This is now ObjectId from MongoDB
-      invoiceNumber: savedInvoice.invoiceNumber,
-      status: savedInvoice.status,
-      tokenIds: savedInvoice.tokenIds,
-      quantity: savedInvoice.quantity,
-      createdAt: savedInvoice.createdAt,
-    };
   }
 }
 

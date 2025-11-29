@@ -13,6 +13,20 @@ export class DistributorController {
     return ProofOfPharmacyModel;
   }
 
+  async _loadCommercialInvoiceModel() {
+    const { CommercialInvoiceModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
+    return CommercialInvoiceModel;
+  }
+
+  async _loadManufacturerInvoiceModel() {
+    const { ManufacturerInvoiceModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
+    return ManufacturerInvoiceModel;
+  }
+
   async getInvoicesFromManufacturer(req, res) {
     try {
       const distributorId = req.user?._id?.toString();
@@ -33,35 +47,17 @@ export class DistributorController {
 
       return res.status(200).json({
         success: true,
-        data: invoices.map(inv => {
-          // Handle quantity - could be value object or number
-          let quantity = inv.quantity;
-          if (quantity && typeof quantity === 'object' && quantity.value !== undefined) {
-            quantity = quantity.value;
-          }
-          
-          // Handle chainTxHash - could be value object or string
-          let chainTxHash = inv.chainTxHash;
-          if (chainTxHash && typeof chainTxHash === 'object' && chainTxHash.hash !== undefined) {
-            chainTxHash = chainTxHash.hash;
-          } else if (chainTxHash && typeof chainTxHash === 'object' && chainTxHash.toString) {
-            chainTxHash = chainTxHash.toString();
-          }
-          
-          return {
-            id: inv.id || null,
-            invoiceNumber: inv.invoiceNumber || null,
-            manufacturerId: inv.fromManufacturerId || null,
-            manufacturerName: inv.manufacturerName || null,
-            drugId: inv.drugId || null,
-            drugName: inv.drugName || null,
-            quantity: quantity || null,
-            status: inv.status || null,
-            chainTxHash: chainTxHash || null,
-            tokenIds: inv.tokenIds || [],
-            createdAt: inv.createdAt || null,
-          };
-        }),
+        data: invoices.map(inv => ({
+          id: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          manufacturerId: inv.fromManufacturerId,
+          drugId: inv.drugId,
+          quantity: inv.quantity,
+          status: inv.status,
+          chainTxHash: inv.chainTxHash,
+          tokenIds: inv.tokenIds,
+          createdAt: inv.createdAt,
+        })),
         count: invoices.length,
       });
     } catch (error) {
@@ -198,7 +194,7 @@ export class DistributorController {
   async confirmReceipt(req, res) {
     try {
       const dto = ConfirmReceiptDTO.fromRequest(req);
-      const distributorId = req.user?.id || req.user?._id?.toString();
+      const distributorId = req.user?._id?.toString();
 
       if (!distributorId) {
         return res.status(403).json({
@@ -258,7 +254,8 @@ export class DistributorController {
         distributorId,
         dto.pharmacyId,
         dto.drugId,
-        dto.tokenIds,
+        dto.amount,
+        dto.tokenIds, // Pass tokenIds if provided
         dto.invoiceNumber,
         dto.invoiceDate,
         dto.quantity,
@@ -361,7 +358,10 @@ export class DistributorController {
       const filters = {
         status: req.query.status,
         batchNumber: req.query.batchNumber,
+        drugId: req.query.drugId, // Thêm filter theo drugId
       };
+
+      const pharmacyId = req.query.pharmacyId; // Query parameter để filter theo pharmacy (optional)
 
       const distributions = await this._distributorService.getDistributionHistory(distributorId, filters);
 
@@ -379,9 +379,122 @@ export class DistributorController {
         proofOfPharmacies.map(pop => pop.proofOfDistribution?.toString()).filter(Boolean)
       );
 
-      return res.status(200).json({
-        success: true,
-        data: distributions.map(dist => ({
+      // Lấy thông tin NFT availability cho mỗi distribution
+      const CommercialInvoiceModel = await this._loadCommercialInvoiceModel();
+      const ManufacturerInvoiceModel = await this._loadManufacturerInvoiceModel();
+
+      // Lấy tất cả manufacturerInvoice của distributor để tính tổng NFT đã nhận theo drugId
+      const manufacturerInvoices = await ManufacturerInvoiceModel.find({
+        toDistributor: distributorId,
+        status: "sent"
+      }).populate("drug").select("_id drug tokenIds");
+
+      // Group tokenIds theo drugId
+      const tokenIdsByDrug = {};
+      const drugIdByInvoiceId = {}; // Map invoiceId -> drugId để tra cứu nhanh
+      for (const invoice of manufacturerInvoices) {
+        const invoiceId = invoice._id?.toString();
+        const drugId = invoice.drug?._id?.toString() || invoice.drug?.toString() || invoice.drug;
+        
+        if (invoiceId && drugId) {
+          drugIdByInvoiceId[invoiceId] = drugId;
+        }
+        
+        if (drugId && invoice.tokenIds && Array.isArray(invoice.tokenIds)) {
+          if (!tokenIdsByDrug[drugId]) {
+            tokenIdsByDrug[drugId] = [];
+          }
+          tokenIdsByDrug[drugId].push(...invoice.tokenIds.map(id => String(id).trim()));
+        }
+      }
+
+      // Loại bỏ duplicate trong mỗi drug
+      for (const drugId in tokenIdsByDrug) {
+        tokenIdsByDrug[drugId] = [...new Set(tokenIdsByDrug[drugId])];
+      }
+
+      // Lấy commercialInvoice để tính NFT đã chuyển
+      // Nếu có pharmacyId, chỉ tính cho pharmacy đó; nếu không, tính cho tất cả pharmacy
+      const commercialInvoiceQuery = {
+        fromDistributor: distributorId,
+        status: { $in: ["draft", "issued", "sent"] }
+      };
+      if (pharmacyId) {
+        commercialInvoiceQuery.toPharmacy = pharmacyId;
+      }
+
+      const commercialInvoices = await CommercialInvoiceModel.find(commercialInvoiceQuery)
+        .populate("drug")
+        .select("drug tokenIds toPharmacy");
+
+      // Group tokenIds đã chuyển theo drugId (và pharmacyId nếu có)
+      const transferredTokenIdsByDrug = {};
+      for (const invoice of commercialInvoices) {
+        const drugId = invoice.drug?._id?.toString() || invoice.drug?.toString() || invoice.drug;
+        if (drugId && invoice.tokenIds && Array.isArray(invoice.tokenIds)) {
+          if (!transferredTokenIdsByDrug[drugId]) {
+            transferredTokenIdsByDrug[drugId] = [];
+          }
+          transferredTokenIdsByDrug[drugId].push(...invoice.tokenIds.map(id => String(id).trim()));
+        }
+      }
+
+      // Loại bỏ duplicate trong mỗi drug
+      for (const drugId in transferredTokenIdsByDrug) {
+        transferredTokenIdsByDrug[drugId] = [...new Set(transferredTokenIdsByDrug[drugId])];
+      }
+
+      // Tính toán availability cho mỗi distribution
+      const result = await Promise.all(distributions.map(async (dist) => {
+        // Lấy drugId từ manufacturerInvoice
+        let drugId = null;
+        
+        // Cách 1: Lấy từ manufacturerInvoiceId nếu có
+        if (dist.manufacturerInvoiceId) {
+          const invoiceId = String(dist.manufacturerInvoiceId).trim();
+          drugId = drugIdByInvoiceId[invoiceId] || null;
+          
+          // Nếu không tìm thấy trong map, query trực tiếp
+          if (!drugId) {
+            const relatedInvoice = await ManufacturerInvoiceModel.findById(invoiceId)
+              .populate("drug")
+              .select("drug");
+            if (relatedInvoice) {
+              drugId = relatedInvoice.drug?._id?.toString() || relatedInvoice.drug?.toString() || relatedInvoice.drug;
+            }
+          }
+        }
+
+        // Cách 2: Nếu không tìm thấy từ invoice, thử lấy từ tokenIds của distribution
+        if (!drugId && dist.tokenIds && dist.tokenIds.length > 0) {
+          // Tìm drugId từ tokenIds đầu tiên
+          const firstTokenId = String(dist.tokenIds[0]).trim();
+          for (const [dId, tokenIds] of Object.entries(tokenIdsByDrug)) {
+            if (tokenIds.includes(firstTokenId)) {
+              drugId = dId;
+              break;
+            }
+          }
+        }
+
+        // Tính toán NFT availability - CHỈ tính cho distribution này
+        // Lấy tokenIds của distribution này (chỉ những NFT trong distribution cụ thể này)
+        const distributionTokenIds = (dist.tokenIds || []).map(id => String(id).trim());
+        
+        // Lấy tất cả NFT đã chuyển cho pharmacy (tổng số cho drug này)
+        const allTransferredTokenIds = drugId ? (transferredTokenIdsByDrug[drugId] || []) : [];
+        
+        // Tính NFT đã chuyển trong distribution này (chỉ những NFT thuộc distribution này)
+        const transferredTokenIdsInDistribution = distributionTokenIds.filter(tid => 
+          allTransferredTokenIds.includes(tid)
+        );
+        
+        // Tính NFT còn lại trong distribution này (chưa chuyển)
+        const availableTokenIdsInDistribution = distributionTokenIds.filter(tid => 
+          !allTransferredTokenIds.includes(tid)
+        );
+
+        return {
           id: dist.id,
           manufacturerId: dist.fromManufacturerId,
           manufacturer: dist.manufacturerInfo || null,
@@ -394,8 +507,20 @@ export class DistributorController {
           chainTxHash: dist.chainTxHash,
           createdAt: dist.createdAt,
           transferToPharmacy: transferredDistributionIds.has(dist.id),
-        })),
-        count: distributions.length,
+          // Thông tin NFT availability - CHỈ tính cho distribution này
+          drugId: drugId || null,
+          totalReceivedNFTs: distributionTokenIds.length, // Số lượng NFT trong distribution này (đã nhận)
+          totalTransferredNFTs: transferredTokenIdsInDistribution.length, // Số NFT đã chuyển từ distribution này
+          availableNFTs: availableTokenIdsInDistribution.length, // Số NFT còn lại trong distribution này
+          transferredTokenIds: transferredTokenIdsInDistribution, // Danh sách NFT đã chuyển từ distribution này
+          availableTokenIds: availableTokenIdsInDistribution, // Danh sách NFT còn lại trong distribution này
+        };
+      }));
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+        count: result.length,
       });
     } catch (error) {
       console.error("Lỗi khi lấy lịch sử phân phối:", error);
@@ -1147,7 +1272,7 @@ export class DistributorController {
 
   async getDashboardStats(req, res) {
     try {
-      const distributorId = req.user?.id || req.user?._id?.toString();
+      const distributorId = req.user?._id?.toString();
 
       if (!distributorId) {
         return res.status(403).json({

@@ -22,5 +22,13 @@ export class ICommercialInvoiceRepository {
   async delete(id) {
     throw new Error("Method delete() must be implemented");
   }
+
+  async findByTokenIds(distributorId, pharmacyId, drugId, tokenIds) {
+    throw new Error("Method findByTokenIds() must be implemented");
+  }
+
+  async countTransferredTokenIds(distributorId, pharmacyId, drugId) {
+    throw new Error("Method countTransferredTokenIds() must be implemented");
+  }
 }
 

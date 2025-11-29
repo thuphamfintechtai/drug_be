@@ -43,6 +43,7 @@ export class DistributorApplicationService {
       drugInfoRepository,
       nftRepository,
       commercialInvoiceRepository,
+      manufacturerInvoiceRepository,
       eventBus
     );
 
@@ -68,7 +69,8 @@ export class DistributorApplicationService {
     distributorId,
     pharmacyId,
     drugId,
-    tokenIds,
+    amount,
+    tokenIds = null,
     invoiceNumber = null,
     invoiceDate = null,
     quantity = null,
@@ -88,7 +90,8 @@ export class DistributorApplicationService {
       distributorId,
       resolvedPharmacyId,
       drugId,
-      tokenIds,
+      amount,
+      tokenIds, // Pass tokenIds if provided
       invoiceNumber,
       invoiceDate,
       quantity,
@@ -283,102 +286,18 @@ export class DistributorApplicationService {
   }
 
   async getInvoicesFromManufacturer(distributorId, filters = {}) {
-    const invoices = await this._manufacturerInvoiceRepository.findByDistributor(distributorId, filters);
-    
-    // Get all unique manufacturer IDs and drug IDs
-    const manufacturerIds = [...new Set(invoices.map(inv => inv.fromManufacturerId).filter(Boolean))];
-    const drugIds = [...new Set(invoices.map(inv => inv.drugId).filter(Boolean))];
-
-    // Query manufacturers
-    const { PharmaCompanyModel } = await import(
-      "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
-    );
-    const manufacturers = manufacturerIds.length > 0
-      ? await PharmaCompanyModel.find({ _id: { $in: manufacturerIds } }).select("_id name").lean()
-      : [];
-
-    // Query drugs
-    const { DrugInfoModel } = await import(
-      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/DrugInfoSchema.js"
-    );
-    const drugs = drugIds.length > 0
-      ? await DrugInfoModel.find({ _id: { $in: drugIds } }).select("_id drugName tradeName genericName").lean()
-      : [];
-
-    // Create maps for quick lookup
-    const manufacturerMap = new Map();
-    manufacturers.forEach(m => {
-      manufacturerMap.set(m._id.toString(), m.name);
-    });
-
-    const drugMap = new Map();
-    drugs.forEach(d => {
-      const drugName = d.drugName || d.tradeName || d.genericName;
-      drugMap.set(d._id.toString(), drugName);
-    });
-
-    // Enrich invoices with manufacturer and drug names
-    return invoices.map(inv => {
-      // Create enriched object with all invoice properties
-      const enriched = {
-        id: inv.id,
-        invoiceNumber: inv.invoiceNumber,
-        fromManufacturerId: inv.fromManufacturerId,
-        toDistributorId: inv.toDistributorId,
-        drugId: inv.drugId,
-        proofOfProductionId: inv.proofOfProductionId,
-        nftInfoId: inv.nftInfoId,
-        quantity: inv.quantity,
-        unitPrice: inv.unitPrice,
-        totalAmount: inv.totalAmount,
-        vatRate: inv.vatRate,
-        vatAmount: inv.vatAmount,
-        finalAmount: inv.finalAmount,
-        notes: inv.notes,
-        status: inv.status,
-        chainTxHash: inv.chainTxHash,
-        tokenIds: inv.tokenIds,
-        invoiceDate: inv.invoiceDate,
-        batchNumber: inv.batchNumber,
-        createdAt: inv.createdAt,
-        updatedAt: inv.updatedAt,
-        // Additional enriched fields
-        manufacturerName: inv.fromManufacturerId ? (manufacturerMap.get(inv.fromManufacturerId) || null) : null,
-        drugName: inv.drugId ? (drugMap.get(inv.drugId) || null) : null,
-      };
-      return enriched;
-    });
+    return await this._manufacturerInvoiceRepository.findByDistributor(distributorId, filters);
   }
 
   async getInvoiceDetail(distributorId, invoiceId) {
-    // Get invoice with populated data directly from model
-    const { ManufacturerInvoiceModel } = await import(
-      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
-    );
-    const mongoose = (await import("mongoose")).default;
-    
-    let invoiceDocument = null;
-    if (mongoose.Types.ObjectId.isValid(invoiceId)) {
-      invoiceDocument = await ManufacturerInvoiceModel.findById(invoiceId)
-        .populate("fromManufacturer", "name licenseNo taxCode")
-        .populate("drug", "drugName tradeName genericName")
-        .lean();
-    }
-
-    if (!invoiceDocument) {
-      throw new Error("Không tìm thấy invoice");
-    }
-
-    // Check if invoice belongs to this distributor
-    const invoiceDistributorId = invoiceDocument.toDistributor?.toString() || invoiceDocument.toDistributor;
-    if (invoiceDistributorId !== distributorId) {
-      throw new Error("Bạn không có quyền xem invoice này");
-    }
-
-    // Get invoice domain object for other data
     const invoice = await this._manufacturerInvoiceRepository.findById(invoiceId);
+    
     if (!invoice) {
       throw new Error("Không tìm thấy invoice");
+    }
+
+    if (invoice.toDistributorId !== distributorId) {
+      throw new Error("Bạn không có quyền xem invoice này");
     }
 
     // Get tokenIds from NFTs
@@ -391,61 +310,10 @@ export class DistributorApplicationService {
       }
     }
 
-    // Get drug information from populated data or query
-    let drugName = null;
-    if (invoiceDocument.drug) {
-      drugName = invoiceDocument.drug.drugName || invoiceDocument.drug.tradeName || invoiceDocument.drug.genericName;
-    } else if (invoice.drugId) {
-      const drugInfo = await this._drugInfoRepository.findById(invoice.drugId);
-      if (drugInfo) {
-        drugName = drugInfo.drugName;
-      }
-    }
-
-    // Get manufacturer information from populated data
-    let manufacturerName = null;
-    if (invoiceDocument.fromManufacturer) {
-      manufacturerName = invoiceDocument.fromManufacturer.name;
-    } else if (invoice.fromManufacturerId) {
-      // Fallback: query if not populated
-      const { PharmaCompanyModel } = await import(
-        "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
-      );
-      const manufacturerInfo = await PharmaCompanyModel.findById(invoice.fromManufacturerId).lean();
-      if (manufacturerInfo) {
-        manufacturerName = manufacturerInfo.name;
-      }
-    }
-
-    // Convert invoice to plain object
-    const invoiceData = {
-      id: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      fromManufacturerId: invoice.fromManufacturerId,
-      toDistributorId: invoice.toDistributorId,
-      drugId: invoice.drugId,
-      proofOfProductionId: invoice.proofOfProductionId,
-      nftInfoId: invoice.nftInfoId,
-      quantity: invoice.quantity?.value || invoice.quantity,
-      unitPrice: invoice.unitPrice?.value || invoice.unitPrice,
-      totalAmount: invoice.totalAmount?.value || invoice.totalAmount,
-      vatRate: invoice.vatRate,
-      vatAmount: invoice.vatAmount?.value || invoice.vatAmount,
-      finalAmount: invoice.finalAmount?.value || invoice.finalAmount,
-      notes: invoice.notes,
-      status: invoice.status,
-      chainTxHash: invoice.chainTxHash?.hash || invoice.chainTxHash,
-      tokenIds: tokenIds,
-      invoiceDate: invoice.invoiceDate,
-      batchNumber: invoice.batchNumber,
-      createdAt: invoice.createdAt,
-      updatedAt: invoice.updatedAt,
-      // Additional information
-      drugName: drugName,
-      manufacturerName: manufacturerName,
+    return {
+      ...invoice,
+      tokenIds,
     };
-
-    return invoiceData;
   }
 
   async getDistributionHistory(distributorId, filters = {}) {
@@ -1106,13 +974,6 @@ export class DistributorApplicationService {
     const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
     const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
     const { NFTInfoModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js");
-    const mongoose = (await import("mongoose")).default;
-
-    // Convert distributorId to ObjectId if it's a string
-    let distributorObjectId = distributorId;
-    if (typeof distributorId === 'string' && mongoose.Types.ObjectId.isValid(distributorId)) {
-      distributorObjectId = new mongoose.Types.ObjectId(distributorId);
-    }
 
     // Get date ranges
     const { start: startOfToday } = DateHelper.getTodayRange();
@@ -1121,21 +982,21 @@ export class DistributorApplicationService {
 
     // === INVOICES FROM MANUFACTURER ===
     const totalInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorObjectId,
+      toDistributor: distributorId,
     });
 
     const todayInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorObjectId,
+      toDistributor: distributorId,
       createdAt: { $gte: startOfToday },
     });
 
     const yesterdayInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorObjectId,
+      toDistributor: distributorId,
       createdAt: { $gte: startOfYesterday, $lt: startOfToday },
     });
 
     const weekInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorObjectId,
+      toDistributor: distributorId,
       createdAt: { $gte: sevenDaysAgo },
     });
 
@@ -1144,57 +1005,41 @@ export class DistributorApplicationService {
 
     // Invoices by status
     const invoicesByStatus = {
-      draft: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorObjectId,
-        status: "draft",
-      }),
       pending: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorObjectId,
+        toDistributor: distributorId,
         status: "pending",
       }),
       issued: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorObjectId,
+        toDistributor: distributorId,
         status: "issued",
       }),
-      confirmed: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorObjectId,
-        status: "confirmed",
-      }),
-      delivered: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorObjectId,
-        status: "delivered",
-      }),
       sent: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorObjectId,
+        toDistributor: distributorId,
         status: "sent",
       }),
       paid: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorObjectId,
+        toDistributor: distributorId,
         status: "paid",
-      }),
-      cancelled: await ManufacturerInvoiceModel.countDocuments({
-        toDistributor: distributorObjectId,
-        status: "cancelled",
       }),
     };
 
     // === DISTRIBUTIONS ===
     const totalDistributions = await ProofOfDistributionModel.countDocuments({
-      toDistributor: distributorObjectId,
+      toDistributor: distributorId,
     });
 
     const todayDistributions = await ProofOfDistributionModel.countDocuments({
-      toDistributor: distributorObjectId,
+      toDistributor: distributorId,
       createdAt: { $gte: startOfToday },
     });
 
     const yesterdayDistributions = await ProofOfDistributionModel.countDocuments({
-      toDistributor: distributorObjectId,
+      toDistributor: distributorId,
       createdAt: { $gte: startOfYesterday, $lt: startOfToday },
     });
 
     const weekDistributions = await ProofOfDistributionModel.countDocuments({
-      toDistributor: distributorObjectId,
+      toDistributor: distributorId,
       createdAt: { $gte: sevenDaysAgo },
     });
 
@@ -1204,44 +1049,40 @@ export class DistributorApplicationService {
     // Distributions by status
     const distributionsByStatus = {
       pending: await ProofOfDistributionModel.countDocuments({
-        toDistributor: distributorObjectId,
+        toDistributor: distributorId,
         status: "pending",
       }),
       in_transit: await ProofOfDistributionModel.countDocuments({
-        toDistributor: distributorObjectId,
+        toDistributor: distributorId,
         status: "in_transit",
       }),
       delivered: await ProofOfDistributionModel.countDocuments({
-        toDistributor: distributorObjectId,
+        toDistributor: distributorId,
         status: "delivered",
       }),
       confirmed: await ProofOfDistributionModel.countDocuments({
-        toDistributor: distributorObjectId,
+        toDistributor: distributorId,
         status: "confirmed",
-      }),
-      rejected: await ProofOfDistributionModel.countDocuments({
-        toDistributor: distributorObjectId,
-        status: "rejected",
       }),
     };
 
     // === TRANSFERS TO PHARMACY ===
     const totalTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorObjectId,
+      fromDistributor: distributorId,
     });
 
     const todayTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorObjectId,
+      fromDistributor: distributorId,
       createdAt: { $gte: startOfToday },
     });
 
     const yesterdayTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorObjectId,
+      fromDistributor: distributorId,
       createdAt: { $gte: startOfYesterday, $lt: startOfToday },
     });
 
     const weekTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorObjectId,
+      fromDistributor: distributorId,
       createdAt: { $gte: sevenDaysAgo },
     });
 
@@ -1251,58 +1092,42 @@ export class DistributorApplicationService {
     // Transfers by status
     const transfersByStatus = {
       draft: await CommercialInvoiceModel.countDocuments({
-        fromDistributor: distributorObjectId,
+        fromDistributor: distributorId,
         status: "draft",
       }),
-      issued: await CommercialInvoiceModel.countDocuments({
-        fromDistributor: distributorObjectId,
-        status: "issued",
-      }),
       sent: await CommercialInvoiceModel.countDocuments({
-        fromDistributor: distributorObjectId,
+        fromDistributor: distributorId,
         status: "sent",
       }),
       paid: await CommercialInvoiceModel.countDocuments({
-        fromDistributor: distributorObjectId,
+        fromDistributor: distributorId,
         status: "paid",
-      }),
-      cancelled: await CommercialInvoiceModel.countDocuments({
-        fromDistributor: distributorObjectId,
-        status: "cancelled",
       }),
     };
 
     // === NFTs ===
     const totalNFTs = await NFTInfoModel.countDocuments({
-      owner: distributorObjectId,
+      owner: distributorId,
     });
 
     const nftsByStatus = {
       minted: await NFTInfoModel.countDocuments({
-        owner: distributorObjectId,
+        owner: distributorId,
         status: "minted",
       }),
       transferred: await NFTInfoModel.countDocuments({
-        owner: distributorObjectId,
+        owner: distributorId,
         status: "transferred",
       }),
       sold: await NFTInfoModel.countDocuments({
-        owner: distributorObjectId,
+        owner: distributorId,
         status: "sold",
-      }),
-      expired: await NFTInfoModel.countDocuments({
-        owner: distributorObjectId,
-        status: "expired",
-      }),
-      recalled: await NFTInfoModel.countDocuments({
-        owner: distributorObjectId,
-        status: "recalled",
       }),
     };
 
     // === RECENT ACTIVITIES ===
     const recentInvoices = await ManufacturerInvoiceModel.find({
-      toDistributor: distributorObjectId,
+      toDistributor: distributorId,
     })
       .sort({ createdAt: -1 })
       .limit(5)
@@ -1310,7 +1135,7 @@ export class DistributorApplicationService {
       .lean();
 
     const recentTransfers = await CommercialInvoiceModel.find({
-      fromDistributor: distributorObjectId,
+      fromDistributor: distributorId,
     })
       .sort({ createdAt: -1 })
       .limit(5)

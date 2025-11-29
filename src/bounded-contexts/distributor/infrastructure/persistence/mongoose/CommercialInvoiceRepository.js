@@ -141,6 +141,32 @@ export class CommercialInvoiceRepository extends ICommercialInvoiceRepository {
    * @param {string[]} tokenIds 
    * @returns {Promise<CommercialInvoice|null>}
    */
+  /**
+   * Tính tổng số tokenIds đã chuyển cho pharmacy từ distributor với drug cụ thể
+   * @param {string} distributorId 
+   * @param {string} pharmacyId 
+   * @param {string} drugId 
+   * @returns {number} Tổng số tokenIds đã chuyển
+   */
+  async countTransferredTokenIds(distributorId, pharmacyId, drugId) {
+    const documents = await CommercialInvoiceModel.find({
+      fromDistributor: distributorId,
+      toPharmacy: pharmacyId,
+      drug: drugId,
+      status: { $in: ["draft", "issued", "sent"] } // Chỉ tính các invoice đã được tạo/chuyển
+    }).select("tokenIds");
+
+    // Tính tổng số tokenIds từ tất cả invoices
+    let totalCount = 0;
+    for (const doc of documents) {
+      if (doc.tokenIds && Array.isArray(doc.tokenIds)) {
+        totalCount += doc.tokenIds.length;
+      }
+    }
+
+    return totalCount;
+  }
+
   async findByTokenIds(distributorId, pharmacyId, drugId, tokenIds) {
     if (!tokenIds || tokenIds.length === 0) {
       return null;

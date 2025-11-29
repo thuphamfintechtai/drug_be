@@ -2,7 +2,8 @@ export class TransferToPharmacyDTO {
   constructor(
     pharmacyId,
     drugId,
-    tokenIds,
+    amount,
+    tokenIds = null,
     invoiceNumber = null,
     invoiceDate = null,
     quantity = null,
@@ -15,6 +16,7 @@ export class TransferToPharmacyDTO {
   ) {
     this.pharmacyId = pharmacyId;
     this.drugId = drugId;
+    this.amount = amount;
     this.tokenIds = tokenIds;
     this.invoiceNumber = invoiceNumber;
     this.invoiceDate = invoiceDate;
@@ -31,6 +33,7 @@ export class TransferToPharmacyDTO {
     const {
       pharmacyId,
       drugId,
+      amount,
       tokenIds,
       invoiceNumber,
       invoiceDate,
@@ -46,7 +49,8 @@ export class TransferToPharmacyDTO {
     return new TransferToPharmacyDTO(
       pharmacyId,
       drugId,
-      tokenIds,
+      amount ? parseInt(amount) : null,
+      tokenIds && Array.isArray(tokenIds) ? tokenIds.map(id => String(id).trim()) : null,
       invoiceNumber,
       invoiceDate ? new Date(invoiceDate) : null,
       quantity ? parseInt(quantity) : null,
@@ -70,8 +74,22 @@ export class TransferToPharmacyDTO {
       errors.push("drugId là bắt buộc");
     }
 
-    if (!this.tokenIds || !Array.isArray(this.tokenIds) || this.tokenIds.length === 0) {
-      errors.push("tokenIds phải là array không rỗng");
+    // Nếu có tokenIds, validate tokenIds; nếu không có, validate amount
+    if (this.tokenIds && Array.isArray(this.tokenIds) && this.tokenIds.length > 0) {
+      // Nếu có tokenIds, amount phải bằng số lượng tokenIds
+      if (this.amount && this.amount !== this.tokenIds.length) {
+        errors.push(`amount (${this.amount}) phải bằng số lượng tokenIds (${this.tokenIds.length})`);
+      }
+      // Validate tokenIds không được trùng lặp
+      const uniqueTokenIds = [...new Set(this.tokenIds)];
+      if (uniqueTokenIds.length !== this.tokenIds.length) {
+        errors.push("tokenIds không được chứa giá trị trùng lặp");
+      }
+    } else {
+      // Nếu không có tokenIds, amount là bắt buộc
+      if (!this.amount || this.amount <= 0 || !Number.isInteger(this.amount)) {
+        errors.push("amount phải là số nguyên dương (hoặc cung cấp tokenIds)");
+      }
     }
 
     if (errors.length > 0) {

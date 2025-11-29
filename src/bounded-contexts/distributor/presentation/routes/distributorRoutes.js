@@ -425,7 +425,16 @@ export const createDistributorRoutes = (distributorController) => {
    * @swagger
    * /api/distributor/transfer/pharmacy:
    *   post:
-   *     summary: Chuyển giao thuốc cho nhà thuốc (Bước 1)
+   *     summary: Chuyển giao thuốc cho nhà thuốc (Bước 1 - Tạo Commercial Invoice)
+   *     description: |
+   *       API này cho phép distributor chuyển giao thuốc cho pharmacy bằng cách:
+   *       1. Query manufacturerInvoice để lấy tất cả tokenIds đã nhận từ manufacturer cho drug cụ thể
+   *       2. Query commercialInvoice để tính số lượng NFT đã chuyển cho pharmacy này
+   *       3. Tính index bắt đầu = số lượng đã chuyển
+   *       4. Lấy `amount` NFT tiếp theo từ mảng tokenIds (theo index)
+   *       5. Tạo commercial invoice với các NFT đã chọn
+   *       
+   *       **Lưu ý**: API này sử dụng logic index-based để tự động chọn NFT, không cần truyền tokenIds cụ thể.
    *     tags: [Distributor]
    *     security:
    *       - bearerAuth: []
@@ -438,47 +447,74 @@ export const createDistributorRoutes = (distributorController) => {
    *             required:
    *               - pharmacyId
    *               - drugId
-   *               - tokenIds
+   *               - amount
    *             properties:
    *               pharmacyId:
    *                 type: string
-   *                 description: ID của nhà thuốc
+   *                 description: ID của nhà thuốc (có thể là Business Entity ID hoặc User ID)
+   *                 example: "69257a5dfe4c6c923fa00b9c"
    *               drugId:
    *                 type: string
    *                 description: ID của thuốc
-   *               tokenIds:
-   *                 type: array
-   *                 items:
-   *                   type: string
-   *                 description: Danh sách token ID của NFT cần chuyển giao
+   *                 example: "6922906121e225a1c222d48f"
+   *               amount:
+   *                 type: integer
+   *                 minimum: 1
+   *                 description: Số lượng NFT muốn chuyển giao. Hệ thống sẽ tự động chọn NFT tiếp theo từ danh sách NFT đã nhận từ manufacturer (theo index)
+   *                 example: 20
    *               invoiceNumber:
    *                 type: string
-   *                 description: Số hóa đơn (nếu không có sẽ tự động generate)
+   *                 description: Số hóa đơn (nếu không có sẽ tự động generate theo format INV-{timestamp}-{randomUUID})
+   *                 example: "INV-1764258765734-4A2BA975"
    *               invoiceDate:
    *                 type: string
    *                 format: date-time
-   *                 description: Ngày tạo hóa đơn
+   *                 description: Ngày tạo hóa đơn (nếu không có sẽ dùng ngày hiện tại)
+   *                 example: "2025-11-27T15:52:45.889Z"
    *               quantity:
-   *                 type: number
-   *                 description: Số lượng (nếu không có sẽ tính từ số lượng tokenIds)
+   *                 type: integer
+   *                 description: Số lượng (nếu không có sẽ mặc định bằng amount)
+   *                 example: 20
    *               unitPrice:
    *                 type: number
+   *                 format: float
    *                 description: Đơn giá
+   *                 example: 100000
    *               totalAmount:
    *                 type: number
+   *                 format: float
    *                 description: Tổng tiền trước VAT
+   *                 example: 2000000
    *               vatRate:
    *                 type: number
+   *                 format: float
    *                 description: Thuế VAT (%)
+   *                 example: 10
    *               vatAmount:
    *                 type: number
+   *                 format: float
    *                 description: Số tiền VAT
+   *                 example: 200000
    *               finalAmount:
    *                 type: number
+   *                 format: float
    *                 description: Tổng tiền sau VAT
+   *                 example: 2200000
    *               notes:
    *                 type: string
    *                 description: Ghi chú
+   *                 example: "Chuyển giao lần 1"
+   *           example:
+   *             pharmacyId: "69257a5dfe4c6c923fa00b9c"
+   *             drugId: "6922906121e225a1c222d48f"
+   *             amount: 20
+   *             invoiceDate: "2025-11-27T15:52:45.889Z"
+   *             unitPrice: 100000
+   *             totalAmount: 2000000
+   *             vatRate: 10
+   *             vatAmount: 200000
+   *             finalAmount: 2200000
+   *             notes: "Chuyển giao lần 1"
    *     responses:
    *       201:
    *         description: Tạo invoice thành công
@@ -498,27 +534,97 @@ export const createDistributorRoutes = (distributorController) => {
    *                   properties:
    *                     invoiceId:
    *                       type: string
+   *                       description: ID của commercial invoice đã tạo
+   *                       example: "692873cdcbff61149aa007be"
    *                     invoiceNumber:
    *                       type: string
+   *                       description: Số hóa đơn
+   *                       example: "INV-1764258765734-4A2BA975"
    *                     status:
    *                       type: string
+   *                       enum: [draft, issued, sent]
+   *                       description: Trạng thái của invoice (mặc định là "issued")
+   *                       example: "issued"
    *                     tokenIds:
    *                       type: array
    *                       items:
    *                         type: string
+   *                       description: Danh sách tokenIds của NFT đã được chọn để chuyển giao (tự động chọn theo index)
+   *                       example: ["194", "195", "196", "197"]
    *                     quantity:
-   *                       type: number
+   *                       type: integer
+   *                       description: Số lượng NFT
+   *                       example: 4
    *                     createdAt:
    *                       type: string
    *                       format: date-time
+   *                       description: Thời gian tạo invoice
+   *                       example: "2025-11-27T15:52:45.889Z"
+   *             example:
+   *               success: true
+   *               message: "Chuyển giao cho pharmacy thành công"
+   *               data:
+   *                 invoiceId: "692873cdcbff61149aa007be"
+   *                 invoiceNumber: "INV-1764258765734-4A2BA975"
+   *                 status: "issued"
+   *                 tokenIds: ["194", "195", "196", "197"]
+   *                 quantity: 4
+   *                 createdAt: "2025-11-27T15:52:45.889Z"
    *       400:
    *         description: Dữ liệu không hợp lệ
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "pharmacyId là bắt buộc, drugId là bắt buộc, amount phải là số nguyên dương"
    *       403:
    *         description: Không có quyền truy cập
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Chỉ có distributor mới có thể chuyển giao cho pharmacy"
    *       404:
    *         description: Không tìm thấy resource
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Thuốc với ID xxx không tồn tại"
    *       500:
    *         description: Lỗi server
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 message:
+   *                   type: string
+   *                   example: "Lỗi server khi chuyển giao cho pharmacy"
+   *                 error:
+   *                   type: string
+   *                   example: "Không đủ NFT để chuyển. Đã chuyển: 20, Tổng số NFT nhận được: 50, Còn lại: 30, Yêu cầu: 40"
    */
   router.post("/transfer/pharmacy", (req, res) =>
     distributorController.transferToPharmacy(req, res)

@@ -300,12 +300,19 @@ export class ProductionController {
       const normalizedManufacturerId = normalizeId(manufacturerId);
 
       // Check NFT ownership - normalize both sides for comparison
+      // NFT phải thuộc về manufacturer (ownerId === manufacturerId hoặc manufacturerId === nft.manufacturerId)
       for (const nft of nfts) {
         const normalizedNftOwnerId = normalizeId(nft.ownerId);
-        if (normalizedNftOwnerId !== normalizedManufacturerId) {
+        const normalizedNftManufacturerId = normalizeId(nft.manufacturerId);
+        
+        // NFT phải thuộc về manufacturer này (ownerId === manufacturerId hoặc manufacturerId === nft.manufacturerId)
+        const isOwnedByManufacturer = normalizedNftOwnerId === normalizedManufacturerId || 
+                                      normalizedNftManufacturerId === normalizedManufacturerId;
+        
+        if (!isOwnedByManufacturer) {
           return res.status(403).json({
             success: false,
-            message: `NFT ${nft.tokenId} không thuộc manufacturer hiện tại. Owner: ${normalizedNftOwnerId}, Manufacturer: ${normalizedManufacturerId}`,
+            message: `NFT ${nft.tokenId} không thuộc manufacturer hiện tại. Owner: ${normalizedNftOwnerId}, Manufacturer: ${normalizedManufacturerId}, NFT Manufacturer: ${normalizedNftManufacturerId}`,
           });
         }
       }
@@ -355,6 +362,8 @@ export class ProductionController {
           }
           
           // Check status lại trong transaction
+          let shouldTransferNFTs = false;
+          
           if (freshInvoice.status === "sent") {
             invoiceAlreadySent = true;
             
@@ -364,32 +373,35 @@ export class ProductionController {
                (freshInvoice.chainTxHash.value || String(freshInvoice.chainTxHash))) : null;
             
             if (currentHash === transactionHash) {
-              // Đã được xử lý với cùng hash, không cần làm gì
-              return; // Early return, không cần update NFTs nữa
-            }
-            
-            // Invoice đã sent nhưng hash khác hoặc chưa có, chỉ update hash (idempotency)
-            if (transactionHash && !currentHash) {
-              // Update hash mà không thay đổi status
-              if (freshInvoice._chainTxHash) {
-                freshInvoice._chainTxHash = transactionHash;
-              } else {
-                freshInvoice.send(transactionHash); // Method send() đã handle idempotency
+              // Đã được xử lý với cùng hash, nhưng vẫn cần check xem NFTs đã được transfer chưa
+              // Nếu NFTs vẫn thuộc về manufacturer, cần transfer
+              shouldTransferNFTs = true;
+            } else {
+              // Invoice đã sent nhưng hash khác hoặc chưa có, chỉ update hash (idempotency)
+              if (transactionHash && !currentHash) {
+                // Update hash mà không thay đổi status
+                if (freshInvoice._chainTxHash) {
+                  freshInvoice._chainTxHash = transactionHash;
+                } else {
+                  freshInvoice.send(transactionHash); // Method send() đã handle idempotency
+                }
+                await this._manufacturerInvoiceRepository.save(freshInvoice, { session });
               }
-              await this._manufacturerInvoiceRepository.save(freshInvoice, { session });
+              // Vẫn cần check và transfer NFTs nếu chưa transfer
+              shouldTransferNFTs = true;
             }
-            return; // Invoice đã sent, không cần transfer NFTs nữa
           } else if (freshInvoice.status === "issued") {
             // Invoice ở trạng thái issued, có thể send
             freshInvoice.send(transactionHash);
             await this._manufacturerInvoiceRepository.save(freshInvoice, { session });
             invoiceAlreadySent = false; // Invoice mới được send
+            shouldTransferNFTs = true; // Cần transfer NFTs
           } else {
             throw new Error(`Invoice phải ở trạng thái issued hoặc sent (current: ${freshInvoice.status})`);
           }
 
-          // Transfer each NFT and save (chỉ khi invoice chưa sent)
-          if (!invoiceAlreadySent) {
+          // Transfer each NFT and save (nếu cần)
+          if (shouldTransferNFTs) {
             const savedNFTs = await Promise.all(
               nfts.map(async (nft) => {
                 // Reload NFT trong transaction để đảm bảo data fresh
@@ -399,28 +411,43 @@ export class ProductionController {
                 }
                 const currentNft = freshNft[0];
                 
-                // Set transaction hash
-                currentNft.setMintTransaction(transactionHash);
-                // Transfer to normalized distributor User ID
-                currentNft.transfer(normalizedDistributorId, transactionHash);
-                // Save and return
-                const saved = await this._nftRepository.save(currentNft, { session });
+                // Check xem NFT đã được transfer chưa
+                const currentOwnerId = normalizeId(currentNft.ownerId);
+                const currentManufacturerId = normalizeId(currentNft.manufacturerId);
                 
-                console.log(`NFT ${currentNft.tokenId} transferred:`, {
-                  tokenId: currentNft.tokenId,
-                  oldOwner: manufacturerId,
-                  newOwner: normalizedDistributorId,
-                  savedOwnerId: saved.ownerId,
-                });
-                
-                return saved;
+                // Nếu NFT vẫn thuộc về manufacturer (ownerId === manufacturerId), cần transfer
+                if (currentOwnerId === normalizedManufacturerId || 
+                    (currentOwnerId === currentManufacturerId && currentManufacturerId === normalizedManufacturerId)) {
+                  // Set transaction hash
+                  if (!currentNft.chainTxHash || currentNft.chainTxHash !== transactionHash) {
+                    currentNft.setMintTransaction(transactionHash);
+                  }
+                  // Transfer to normalized distributor User ID
+                  currentNft.transfer(normalizedDistributorId, transactionHash);
+                  // Save and return
+                  const saved = await this._nftRepository.save(currentNft, { session });
+                  
+                  console.log(`NFT ${currentNft.tokenId} transferred:`, {
+                    tokenId: currentNft.tokenId,
+                    oldOwner: currentOwnerId,
+                    newOwner: normalizedDistributorId,
+                    savedOwnerId: saved.ownerId,
+                  });
+                  
+                  return saved;
+                } else {
+                  // NFT đã được transfer rồi, chỉ cần verify
+                  console.log(`NFT ${currentNft.tokenId} đã được transfer trước đó. Owner hiện tại: ${currentOwnerId}`);
+                  return currentNft;
+                }
               })
             );
 
-            // Verify all NFTs were transferred correctly
+            // Verify all NFTs were transferred correctly (chỉ check những NFT đã được transfer)
             const failedTransfers = savedNFTs.filter(saved => {
               const savedOwnerId = normalizeId(saved.ownerId);
-              return savedOwnerId !== normalizedDistributorId;
+              // Nếu owner vẫn là manufacturer, coi như transfer failed
+              return savedOwnerId === normalizedManufacturerId;
             });
 
             if (failedTransfers.length > 0) {
@@ -433,7 +460,7 @@ export class ProductionController {
       } finally {
         await session.endSession();
       }
-      
+
       // Reload invoice sau transaction để trả về data mới nhất
       const updatedInvoice = await this._manufacturerInvoiceRepository.findById(invoiceId);
       
