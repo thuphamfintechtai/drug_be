@@ -1014,7 +1014,7 @@ export const createDistributorRoutes = (distributorController) => {
    *           type: string
    *           enum: [true, false]
    *           default: false
-   *         description: "true" để lấy nhà thuốc đã ký hợp đồng, "false" hoặc không có để lấy nhà thuốc chưa có hợp đồng
+   *         description: 'true để lấy nhà thuốc đã ký hợp đồng, false hoặc không có để lấy nhà thuốc chưa có hợp đồng'
    *       - in: query
    *         name: page
    *         schema:
