@@ -832,6 +832,55 @@ export class DistributorController {
     }
   }
 
+  async getAvailablePharmacies(req, res) {
+    try {
+      const distributorId = req.user?._id?.toString();
+
+      if (!distributorId) {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ có distributor mới có thể xem danh sách pharmacies",
+        });
+      }
+
+      const filters = {
+        status: req.query.status,
+        search: req.query.search,
+        page: req.query.page,
+        limit: req.query.limit,
+        signed: req.query.signed, // "true" để lấy pharmacy đã ký hợp đồng, "false" hoặc không có để lấy chưa có hợp đồng
+      };
+
+      const result = await this._distributorService.getAvailablePharmacies(distributorId, filters);
+
+      const signed = filters.signed === "true" || filters.signed === true;
+      const message = signed 
+        ? "Lấy danh sách pharmacies đã ký hợp đồng thành công"
+        : "Lấy danh sách pharmacies chưa có hợp đồng thành công";
+
+      return res.status(200).json({
+        success: true,
+        message,
+        data: {
+          pharmacies: result.pharmacies,
+          pagination: {
+            total: result.total,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Lỗi khi lấy danh sách pharmacies:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi lấy danh sách pharmacies",
+        error: error.message,
+      });
+    }
+  }
+
   async getChartOneWeek(req, res) {
     try {
       const distributorId = req.user?._id?.toString();
