@@ -9,13 +9,20 @@ export class DrugInfoRepository extends IDrugInfoRepository {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return null;
     }
-    
+
     const document = await DrugInfoModel.findById(id).populate("manufacturer");
     return DrugInfoMapper.toDomain(document);
   }
 
   async findByATCCode(atcCode) {
-    const document = await DrugInfoModel.findOne({ atcCode: atcCode.toUpperCase() });
+    let document = await DrugInfoModel.findOne({
+      atcCode: atcCode.toUpperCase(),
+    });
+    if (!document) {
+      document = await DrugInfoModel.findOne({
+        tradeName: { $regex: atcCode, $options: "i" },
+      });
+    }
     return DrugInfoMapper.toDomain(document);
   }
 
@@ -24,7 +31,9 @@ export class DrugInfoRepository extends IDrugInfoRepository {
 
     // Try to find by ObjectId first
     if (mongoose.Types.ObjectId.isValid(identifier)) {
-      const document = await DrugInfoModel.findById(identifier).populate("manufacturer");
+      const document = await DrugInfoModel.findById(identifier).populate(
+        "manufacturer"
+      );
       if (document) {
         drug = DrugInfoMapper.toDomain(document);
       }
@@ -32,7 +41,9 @@ export class DrugInfoRepository extends IDrugInfoRepository {
 
     // Try to find by ATC code if not found yet
     if (!drug) {
-      const atcDocument = await DrugInfoModel.findOne({ atcCode: identifier.toUpperCase() }).populate("manufacturer");
+      const atcDocument = await DrugInfoModel.findOne({
+        atcCode: identifier.toUpperCase(),
+      }).populate("manufacturer");
       if (atcDocument) {
         drug = DrugInfoMapper.toDomain(atcDocument);
       }
@@ -43,7 +54,9 @@ export class DrugInfoRepository extends IDrugInfoRepository {
       const match = identifier.match(/\(([^)]+)\)/);
       if (match && match[1]) {
         const extractedCode = match[1].trim();
-        const codeDocument = await DrugInfoModel.findOne({ atcCode: extractedCode.toUpperCase() }).populate("manufacturer");
+        const codeDocument = await DrugInfoModel.findOne({
+          atcCode: extractedCode.toUpperCase(),
+        }).populate("manufacturer");
         if (codeDocument) {
           drug = DrugInfoMapper.toDomain(codeDocument);
         }
@@ -53,8 +66,8 @@ export class DrugInfoRepository extends IDrugInfoRepository {
     // Try to find by tradeName (exact match or contains) if not found yet
     if (!drug) {
       // Extract name part before parentheses if exists
-      const namePart = identifier.split('(')[0].trim();
-      
+      const namePart = identifier.split("(")[0].trim();
+
       const nameQuery = {
         $or: [
           { tradeName: namePart },
@@ -62,11 +75,13 @@ export class DrugInfoRepository extends IDrugInfoRepository {
           { tradeName: { $regex: namePart, $options: "i" } },
           { tradeName: { $regex: identifier, $options: "i" } },
           { genericName: { $regex: namePart, $options: "i" } },
-          { genericName: { $regex: identifier, $options: "i" } }
-        ]
+          { genericName: { $regex: identifier, $options: "i" } },
+        ],
       };
 
-      const nameDocument = await DrugInfoModel.findOne(nameQuery).populate("manufacturer");
+      const nameDocument = await DrugInfoModel.findOne(nameQuery).populate(
+        "manufacturer"
+      );
       if (nameDocument) {
         drug = DrugInfoMapper.toDomain(nameDocument);
       }
@@ -86,7 +101,9 @@ export class DrugInfoRepository extends IDrugInfoRepository {
   }
 
   async findByManufacturer(manufacturerId) {
-    const documents = await DrugInfoModel.find({ manufacturer: manufacturerId });
+    const documents = await DrugInfoModel.find({
+      manufacturer: manufacturerId,
+    });
     return documents.map((doc) => DrugInfoMapper.toDomain(doc));
   }
 
@@ -94,7 +111,10 @@ export class DrugInfoRepository extends IDrugInfoRepository {
     const document = DrugInfoMapper.toPersistence(drugInfo);
 
     // Check if it's a valid MongoDB ObjectId (existing document)
-    const isObjectId = drugInfo.id && drugInfo.id.length === 24 && /^[0-9a-fA-F]{24}$/.test(drugInfo.id);
+    const isObjectId =
+      drugInfo.id &&
+      drugInfo.id.length === 24 &&
+      /^[0-9a-fA-F]{24}$/.test(drugInfo.id);
 
     if (isObjectId && document._id) {
       // Existing document - update
@@ -118,7 +138,7 @@ export class DrugInfoRepository extends IDrugInfoRepository {
 
   async findAll(filters = {}) {
     const query = {};
-    
+
     // Filter by status
     if (filters.status) {
       query.status = filters.status;
@@ -127,8 +147,10 @@ export class DrugInfoRepository extends IDrugInfoRepository {
       query.status = "active";
     }
 
-    const documents = await DrugInfoModel.find(query).populate("manufacturer", "name");
+    const documents = await DrugInfoModel.find(query).populate(
+      "manufacturer",
+      "name"
+    );
     return documents.map((doc) => DrugInfoMapper.toDomain(doc));
   }
 }
-

@@ -83,7 +83,9 @@ export class DistributorApplicationService {
   ) {
     const resolvedPharmacyId = await this._resolvePharmacyUserId(pharmacyId);
     if (!resolvedPharmacyId) {
-      throw new Error("Không xác định được pharmacy hợp lệ từ pharmacyId được cung cấp");
+      throw new Error(
+        "Không xác định được pharmacy hợp lệ từ pharmacyId được cung cấp"
+      );
     }
 
     return await this._transferToPharmacyUseCase.execute(
@@ -111,34 +113,46 @@ export class DistributorApplicationService {
     tokenIds
   ) {
     // Validate transactionHash format (basic check for Ethereum hash)
-    if (!transactionHash || typeof transactionHash !== 'string') {
+    if (!transactionHash || typeof transactionHash !== "string") {
       throw new Error("transactionHash không hợp lệ");
     }
     if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash)) {
-      throw new Error("transactionHash phải có định dạng Ethereum hash (0x + 64 hex chars)");
+      throw new Error(
+        "transactionHash phải có định dạng Ethereum hash (0x + 64 hex chars)"
+      );
     }
 
     // Find invoice
     const invoice = await this._commercialInvoiceRepository.findById(invoiceId);
     if (!invoice) {
-      throw new Error(`Không tìm thấy invoice với ID: ${invoiceId}. Vui lòng kiểm tra lại invoiceId.`);
+      throw new Error(
+        `Không tìm thấy invoice với ID: ${invoiceId}. Vui lòng kiểm tra lại invoiceId.`
+      );
     }
 
     // Normalize IDs for comparison
-    const normalizedDistributorId = distributorId ? String(distributorId).trim() : null;
-    const normalizedFromDistributorId = invoice.fromDistributorId ? String(invoice.fromDistributorId).trim() : null;
-    const invoicePharmacyId = invoice.toPharmacyId ? String(invoice.toPharmacyId).trim() : null;
+    const normalizedDistributorId = distributorId
+      ? String(distributorId).trim()
+      : null;
+    const normalizedFromDistributorId = invoice.fromDistributorId
+      ? String(invoice.fromDistributorId).trim()
+      : null;
+    const invoicePharmacyId = invoice.toPharmacyId
+      ? String(invoice.toPharmacyId).trim()
+      : null;
     let normalizedPharmacyId = invoicePharmacyId;
 
     if (!normalizedPharmacyId) {
       normalizedPharmacyId = await this._getInvoicePharmacyId(invoiceId);
     }
 
-    const normalizedPharmacyUserId = await this._resolvePharmacyUserId(normalizedPharmacyId);
+    const normalizedPharmacyUserId = await this._resolvePharmacyUserId(
+      normalizedPharmacyId
+    );
     if (!normalizedPharmacyUserId) {
       throw new Error(
         `Không xác định được pharmacy gắn với invoice ${invoiceId}. ` +
-        `Vui lòng kiểm tra lại dữ liệu trước khi lưu transaction.`
+          `Vui lòng kiểm tra lại dữ liệu trước khi lưu transaction.`
       );
     }
 
@@ -150,14 +164,17 @@ export class DistributorApplicationService {
     if (normalizedFromDistributorId !== normalizedDistributorId) {
       throw new Error(
         `Bạn không có quyền cập nhật invoice này. ` +
-        `Invoice thuộc về distributor: ${normalizedFromDistributorId || 'null'}, ` +
-        `Distributor hiện tại: ${normalizedDistributorId || 'null'}`
+          `Invoice thuộc về distributor: ${
+            normalizedFromDistributorId || "null"
+          }, ` +
+          `Distributor hiện tại: ${normalizedDistributorId || "null"}`
       );
     }
 
-
-    const currentChainTxHash = invoice.chainTxHash 
-      ? (invoice.chainTxHash.value || invoice.chainTxHash.toString() || invoice.chainTxHash)
+    const currentChainTxHash = invoice.chainTxHash
+      ? invoice.chainTxHash.value ||
+        invoice.chainTxHash.toString() ||
+        invoice.chainTxHash
       : null;
 
     if (currentChainTxHash === transactionHash) {
@@ -175,32 +192,44 @@ export class DistributorApplicationService {
     if (invoice.status !== "issued" && invoice.status !== "sent") {
       throw new Error(
         `Invoice phải ở trạng thái "issued" hoặc "sent" để lưu transaction. ` +
-        `Trạng thái hiện tại: ${invoice.status}`
+          `Trạng thái hiện tại: ${invoice.status}`
       );
     }
 
     // If invoice is already "sent" but chainTxHash doesn't match, it means blockchain event
     // processed it with a different transaction hash, or this is a duplicate call
-    if (invoice.status === "sent" && currentChainTxHash && currentChainTxHash !== transactionHash) {
+    if (
+      invoice.status === "sent" &&
+      currentChainTxHash &&
+      currentChainTxHash !== transactionHash
+    ) {
       throw new Error(
         `Invoice đã được xử lý với transaction hash khác: ${currentChainTxHash}. ` +
-        `Transaction hash hiện tại: ${transactionHash}`
+          `Transaction hash hiện tại: ${transactionHash}`
       );
     }
 
     // CRITICAL: Validate tokenIds match invoice.tokenIds exactly
     const invoiceTokenIds = invoice.tokenIds || [];
     const requestTokenIds = Array.isArray(tokenIds) ? tokenIds : [];
-    
+
     if (invoiceTokenIds.length !== requestTokenIds.length) {
-      throw new Error(`tokenIds không khớp với invoice. Invoice có ${invoiceTokenIds.length} tokenIds, request có ${requestTokenIds.length}`);
+      throw new Error(
+        `tokenIds không khớp với invoice. Invoice có ${invoiceTokenIds.length} tokenIds, request có ${requestTokenIds.length}`
+      );
     }
 
-    const invoiceTokenIdsSet = new Set(invoiceTokenIds.map(id => id.toString()));
-    const requestTokenIdsSet = new Set(requestTokenIds.map(id => id.toString()));
-    
+    const invoiceTokenIdsSet = new Set(
+      invoiceTokenIds.map((id) => id.toString())
+    );
+    const requestTokenIdsSet = new Set(
+      requestTokenIds.map((id) => id.toString())
+    );
+
     if (invoiceTokenIdsSet.size !== requestTokenIdsSet.size) {
-      throw new Error("tokenIds có giá trị trùng lặp hoặc không khớp với invoice");
+      throw new Error(
+        "tokenIds có giá trị trùng lặp hoặc không khớp với invoice"
+      );
     }
 
     for (const tokenId of requestTokenIds) {
@@ -216,21 +245,27 @@ export class DistributorApplicationService {
     }
 
     // Normalize IDs for comparison
-    const normalizedDistributorIdForNFT = distributorId ? String(distributorId).trim() : null;
+    const normalizedDistributorIdForNFT = distributorId
+      ? String(distributorId).trim()
+      : null;
     // Check NFT ownership: NFT có thể đã được transfer trên blockchain trước đó
     // Nếu NFT đã thuộc về pharmacy, chỉ cần update transaction hash
     // Nếu NFT vẫn thuộc về distributor, thì transfer
     for (const nft of nfts) {
-      const normalizedNftOwnerId = nft.ownerId ? String(nft.ownerId).trim() : null;
-      
+      const normalizedNftOwnerId = nft.ownerId
+        ? String(nft.ownerId).trim()
+        : null;
+
       // NFT phải thuộc về distributor (chưa transfer) hoặc pharmacy (đã transfer trên blockchain)
-      if (normalizedNftOwnerId !== normalizedDistributorIdForNFT && 
-          normalizedNftOwnerId !== normalizedPharmacyUserId) {
+      if (
+        normalizedNftOwnerId !== normalizedDistributorIdForNFT &&
+        normalizedNftOwnerId !== normalizedPharmacyUserId
+      ) {
         throw new Error(
           `NFT với tokenId ${nft.tokenId} không thuộc về distributor hoặc pharmacy trong invoice. ` +
-          `Owner hiện tại: ${normalizedNftOwnerId || 'null'}, ` +
-          `Distributor ID: ${normalizedDistributorIdForNFT || 'null'}, ` +
-          `Pharmacy ID (user): ${normalizedPharmacyUserId || 'null'}`
+            `Owner hiện tại: ${normalizedNftOwnerId || "null"}, ` +
+            `Distributor ID: ${normalizedDistributorIdForNFT || "null"}, ` +
+            `Pharmacy ID (user): ${normalizedPharmacyUserId || "null"}`
         );
       }
     }
@@ -238,7 +273,7 @@ export class DistributorApplicationService {
     // Use database transaction to ensure atomicity
     const mongoose = await import("mongoose");
     const session = await mongoose.default.startSession();
-    
+
     try {
       await session.withTransaction(async () => {
         // Update invoice with transaction hash and mark as sent
@@ -253,19 +288,19 @@ export class DistributorApplicationService {
           nfts.map(async (nft) => {
             const nftOwnerId = nft.ownerId ? String(nft.ownerId).trim() : null;
             const shouldTransfer = nftOwnerId === normalizedDistributorIdForNFT;
-            
+
             // Set transaction hash if not already set (for NFTs already transferred on blockchain)
             // or always set for new transfers
             if (!nft.chainTxHash || shouldTransfer) {
               nft.setMintTransaction(transactionHash);
             }
-            
+
             // Only transfer if NFT still belongs to distributor
             if (shouldTransfer) {
               nft.transfer(normalizedPharmacyUserId, transactionHash);
             }
             // If NFT already transferred on blockchain, no need to transfer again
-            
+
             await this._nftRepository.save(nft, { session });
           })
         );
@@ -275,7 +310,9 @@ export class DistributorApplicationService {
     }
 
     // Reload invoice to get updated state
-    const updatedInvoice = await this._commercialInvoiceRepository.findById(invoiceId);
+    const updatedInvoice = await this._commercialInvoiceRepository.findById(
+      invoiceId
+    );
 
     return {
       invoiceId: updatedInvoice.id,
@@ -286,12 +323,17 @@ export class DistributorApplicationService {
   }
 
   async getInvoicesFromManufacturer(distributorId, filters = {}) {
-    return await this._manufacturerInvoiceRepository.findByDistributor(distributorId, filters);
+    return await this._manufacturerInvoiceRepository.findByDistributor(
+      distributorId,
+      filters
+    );
   }
 
   async getInvoiceDetail(distributorId, invoiceId) {
-    const invoice = await this._manufacturerInvoiceRepository.findById(invoiceId);
-    
+    const invoice = await this._manufacturerInvoiceRepository.findById(
+      invoiceId
+    );
+
     if (!invoice) {
       throw new Error("Không tìm thấy invoice");
     }
@@ -317,19 +359,33 @@ export class DistributorApplicationService {
   }
 
   async getDistributionHistory(distributorId, filters = {}) {
-    return await this._proofOfDistributionRepository.findByDistributor(distributorId, filters);
+    return await this._proofOfDistributionRepository.findByDistributor(
+      distributorId,
+      filters
+    );
   }
 
   async getTransferToPharmacyHistory(distributorId, filters = {}) {
-    return await this._commercialInvoiceRepository.findByDistributor(distributorId, filters);
+    return await this._commercialInvoiceRepository.findByDistributor(
+      distributorId,
+      filters
+    );
   }
 
   async getStatistics(distributorId) {
     // Import mongoose models for statistics
-    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
-    const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
-    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
-    const { NFTInfoModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js");
+    const { ManufacturerInvoiceModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
+    const { ProofOfDistributionModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js"
+    );
+    const { CommercialInvoiceModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
+    const { NFTInfoModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js"
+    );
 
     // Count invoices from manufacturer
     const totalInvoices = await ManufacturerInvoiceModel.countDocuments({
@@ -380,9 +436,10 @@ export class DistributorApplicationService {
     };
 
     // Count transfers to pharmacy
-    const totalTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorId,
-    });
+    const totalTransfersToPharmacy =
+      await CommercialInvoiceModel.countDocuments({
+        fromDistributor: distributorId,
+      });
 
     const transferStatusStats = {
       draft: await CommercialInvoiceModel.countDocuments({
@@ -430,9 +487,19 @@ export class DistributorApplicationService {
   }
 
   async trackDrugByTokenId(distributorId, tokenId) {
-    const PublicTrackingApplicationService = (await import("../../../public/application/services/PublicTrackingApplicationService.js")).PublicTrackingApplicationService;
-    const TrackDrugUseCase = (await import("../../../public/application/use-cases/TrackDrugUseCase.js")).TrackDrugUseCase;
-    const publicBlockchainService = (await import("../../../public/infrastructure/blockchain/BlockchainService.js")).BlockchainService;
+    const PublicTrackingApplicationService = (
+      await import(
+        "../../../public/application/services/PublicTrackingApplicationService.js"
+      )
+    ).PublicTrackingApplicationService;
+    const TrackDrugUseCase = (
+      await import("../../../public/application/use-cases/TrackDrugUseCase.js")
+    ).TrackDrugUseCase;
+    const publicBlockchainService = (
+      await import(
+        "../../../public/infrastructure/blockchain/BlockchainService.js"
+      )
+    ).BlockchainService;
 
     // Use PublicTrackingService to get tracking info
     const publicTrackingService = new PublicTrackingApplicationService(
@@ -446,29 +513,33 @@ export class DistributorApplicationService {
       new publicBlockchainService()
     );
 
-    const TrackDrugDTO = (await import("../../../public/application/dto/TrackDrugDTO.js")).TrackDrugDTO;
+    const TrackDrugDTO = (
+      await import("../../../public/application/dto/TrackDrugDTO.js")
+    ).TrackDrugDTO;
     const dto = new TrackDrugDTO(tokenId);
-    
+
     return await publicTrackingService.trackDrugByTokenId(tokenId);
   }
 
   async getDrugs(distributorId, filters = {}) {
     // Get all drugs (distributor can see all active drugs)
     const drugs = await this._drugInfoRepository.findAll(filters);
-    
+
     // Filter by status if provided
     let filtered = drugs;
     if (filters.status) {
-      filtered = filtered.filter(d => d.status === filters.status);
+      filtered = filtered.filter((d) => d.status === filters.status);
     }
-    
+
     // Filter by search if provided
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      filtered = filtered.filter(d => 
-        d.drugName?.toLowerCase().includes(searchLower) ||
-        (d.genericName && d.genericName.toLowerCase().includes(searchLower)) ||
-        d.atcCode?.toLowerCase().includes(searchLower)
+      filtered = filtered.filter(
+        (d) =>
+          d.drugName?.toLowerCase().includes(searchLower) ||
+          (d.genericName &&
+            d.genericName.toLowerCase().includes(searchLower)) ||
+          d.atcCode?.toLowerCase().includes(searchLower)
       );
     }
 
@@ -476,8 +547,10 @@ export class DistributorApplicationService {
   }
 
   async searchDrugByATCCode(atcCode) {
-    const drug = await this._drugInfoRepository.findByATCCode(atcCode);
-    
+    const drug = await this._drugInfoRepository.findByATCCode(
+      atcCode.toUpperCase()
+    );
+
     if (!drug) {
       throw new Error(`Không tìm thấy thuốc với ATC code ${atcCode}`);
     }
@@ -491,7 +564,7 @@ export class DistributorApplicationService {
       "../../../registration/infrastructure/persistence/BusinessEntityRepository.js"
     );
     const businessEntityRepo = new BusinessEntityRepository();
-    
+
     const distributor = await businessEntityRepo.findByUserId(
       user.id || user._id?.toString(),
       "distributor"
@@ -525,10 +598,12 @@ export class DistributorApplicationService {
   }
 
   async getPharmacies(filters = {}) {
-    const { PharmacyModel } = await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js");
-    
+    const { PharmacyModel } = await import(
+      "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+    );
+
     const query = { status: filters.status || "active" };
-    
+
     if (filters.search) {
       query.$or = [
         { name: { $regex: filters.search, $options: "i" } },
@@ -559,9 +634,15 @@ export class DistributorApplicationService {
   }
 
   async getChartOneWeek(distributorId) {
-    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../shared-kernel/utils/DataAggregationService.js")).default;
-    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
+    const DateHelper = (
+      await import("../../../../shared-kernel/utils/DateHelper.js")
+    ).default;
+    const DataAggregationService = (
+      await import("../../../../shared-kernel/utils/DataAggregationService.js")
+    ).default;
+    const { ManufacturerInvoiceModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
 
     const { start: sevenDaysAgo } = DateHelper.getWeekRange();
     const invoices = await ManufacturerInvoiceModel.find({
@@ -595,8 +676,12 @@ export class DistributorApplicationService {
       return null;
     }
 
-    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
-    const rawInvoice = await CommercialInvoiceModel.findById(objectId).select("toPharmacy").lean();
+    const { CommercialInvoiceModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
+    const rawInvoice = await CommercialInvoiceModel.findById(objectId)
+      .select("toPharmacy")
+      .lean();
     return rawInvoice?.toPharmacy ? rawInvoice.toPharmacy.toString() : null;
   }
 
@@ -611,8 +696,12 @@ export class DistributorApplicationService {
       return normalizedId;
     }
 
-    const { PharmacyModel } = await import("../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js");
-    const pharmacyEntity = await PharmacyModel.findById(normalizedId).select("user");
+    const { PharmacyModel } = await import(
+      "../../../registration/infrastructure/persistence/mongoose/schemas/BusinessEntitySchemas.js"
+    );
+    const pharmacyEntity = await PharmacyModel.findById(normalizedId).select(
+      "user"
+    );
     if (pharmacyEntity?.user) {
       return pharmacyEntity.user.toString();
     }
@@ -621,9 +710,17 @@ export class DistributorApplicationService {
   }
 
   async getChartTodayYesterday(distributorId) {
-    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
-    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
-    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
+    const DateHelper = (
+      await import("../../../../shared-kernel/utils/DateHelper.js")
+    ).default;
+    const StatisticsCalculationService = (
+      await import(
+        "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+      )
+    ).default;
+    const { ManufacturerInvoiceModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
 
     const { start: startOfToday } = DateHelper.getTodayRange();
     const { start: startOfYesterday } = DateHelper.getYesterdayRange();
@@ -641,10 +738,11 @@ export class DistributorApplicationService {
     });
 
     // Tính chênh lệch và phần trăm thay đổi
-    const { diff, percentChange } = StatisticsCalculationService.calculateTodayYesterdayStats(
-      todayCount,
-      yesterdayCount
-    );
+    const { diff, percentChange } =
+      StatisticsCalculationService.calculateTodayYesterdayStats(
+        todayCount,
+        yesterdayCount
+      );
 
     const todayInvoices = await ManufacturerInvoiceModel.find({
       toDistributor: distributorId,
@@ -671,10 +769,20 @@ export class DistributorApplicationService {
   }
 
   async getInvoicesByDateRange(distributorId, startDate, endDate) {
-    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../shared-kernel/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
-    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
+    const DateHelper = (
+      await import("../../../../shared-kernel/utils/DateHelper.js")
+    ).default;
+    const DataAggregationService = (
+      await import("../../../../shared-kernel/utils/DataAggregationService.js")
+    ).default;
+    const StatisticsCalculationService = (
+      await import(
+        "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+      )
+    ).default;
+    const { ManufacturerInvoiceModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
 
     const { start, end } = DateHelper.parseDateRange(startDate, endDate);
 
@@ -691,7 +799,10 @@ export class DistributorApplicationService {
       .sort({ createdAt: -1 });
 
     // Tính tổng số lượng
-    const totalQuantity = DataAggregationService.calculateTotalQuantity(invoices, 'quantity');
+    const totalQuantity = DataAggregationService.calculateTotalQuantity(
+      invoices,
+      "quantity"
+    );
 
     // Group theo ngày để dễ vẽ biểu đồ
     const dailyStats = DataAggregationService.groupInvoicesByDate(invoices);
@@ -707,7 +818,10 @@ export class DistributorApplicationService {
       summary: {
         totalInvoices: invoices.length,
         totalQuantity,
-        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(invoices.length, days),
+        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(
+          invoices.length,
+          days
+        ),
       },
       dailyStats,
       invoices,
@@ -715,10 +829,20 @@ export class DistributorApplicationService {
   }
 
   async getDistributionsByDateRange(distributorId, startDate, endDate) {
-    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../shared-kernel/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
-    const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
+    const DateHelper = (
+      await import("../../../../shared-kernel/utils/DateHelper.js")
+    ).default;
+    const DataAggregationService = (
+      await import("../../../../shared-kernel/utils/DataAggregationService.js")
+    ).default;
+    const StatisticsCalculationService = (
+      await import(
+        "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+      )
+    ).default;
+    const { ProofOfDistributionModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js"
+    );
 
     const { start, end } = DateHelper.parseDateRange(startDate, endDate);
 
@@ -735,10 +859,14 @@ export class DistributorApplicationService {
       .sort({ createdAt: -1 });
 
     // Tính tổng số lượng
-    const totalQuantity = DataAggregationService.calculateTotalQuantity(distributions, 'distributedQuantity');
+    const totalQuantity = DataAggregationService.calculateTotalQuantity(
+      distributions,
+      "distributedQuantity"
+    );
 
     // Group theo ngày để dễ vẽ biểu đồ
-    const dailyStats = DataAggregationService.groupDistributionsByDate(distributions);
+    const dailyStats =
+      DataAggregationService.groupDistributionsByDate(distributions);
 
     const days = DateHelper.getDaysDifference(start, end);
 
@@ -751,7 +879,10 @@ export class DistributorApplicationService {
       summary: {
         totalDistributions: distributions.length,
         totalQuantity,
-        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(distributions.length, days),
+        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(
+          distributions.length,
+          days
+        ),
       },
       dailyStats,
       distributions,
@@ -759,10 +890,20 @@ export class DistributorApplicationService {
   }
 
   async getTransfersToPharmacyByDateRange(distributorId, startDate, endDate) {
-    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
-    const DataAggregationService = (await import("../../../../shared-kernel/utils/DataAggregationService.js")).default;
-    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
-    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
+    const DateHelper = (
+      await import("../../../../shared-kernel/utils/DateHelper.js")
+    ).default;
+    const DataAggregationService = (
+      await import("../../../../shared-kernel/utils/DataAggregationService.js")
+    ).default;
+    const StatisticsCalculationService = (
+      await import(
+        "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+      )
+    ).default;
+    const { CommercialInvoiceModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
 
     if (!startDate || !endDate) {
       throw new Error("Vui lòng cung cấp startDate và endDate");
@@ -791,10 +932,14 @@ export class DistributorApplicationService {
       .sort({ createdAt: -1 });
 
     // Tính tổng số lượng
-    const totalQuantity = DataAggregationService.calculateTotalQuantity(commercialInvoices, 'quantity');
+    const totalQuantity = DataAggregationService.calculateTotalQuantity(
+      commercialInvoices,
+      "quantity"
+    );
 
     // Group theo ngày để dễ vẽ biểu đồ
-    const dailyStats = DataAggregationService.groupInvoicesByDate(commercialInvoices);
+    const dailyStats =
+      DataAggregationService.groupInvoicesByDate(commercialInvoices);
 
     const days = DateHelper.getDaysDifference(start, end);
 
@@ -807,14 +952,21 @@ export class DistributorApplicationService {
       summary: {
         totalTransfers: commercialInvoices.length,
         totalQuantity,
-        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(commercialInvoices.length, days),
+        averagePerDay: StatisticsCalculationService.calculateAveragePerDay(
+          commercialInvoices.length,
+          days
+        ),
       },
       dailyStats,
       transfers: commercialInvoices,
     };
   }
 
-  async createContractRequest(dto, distributorId, distributorPrivateKey = null) {
+  async createContractRequest(
+    dto,
+    distributorId,
+    distributorPrivateKey = null
+  ) {
     return await this._createContractRequestUseCase.execute(
       dto,
       distributorId,
@@ -823,16 +975,23 @@ export class DistributorApplicationService {
   }
 
   async finalizeContractAndMint(dto, distributorId, distributorPrivateKey) {
-    return await this._finalizeContractAndMintUseCase.execute(dto, distributorId, distributorPrivateKey);
+    return await this._finalizeContractAndMintUseCase.execute(
+      dto,
+      distributorId,
+      distributorPrivateKey
+    );
   }
 
   async getContracts(distributorId, filters = {}) {
-    return await this._contractRepository.findByDistributor(distributorId, filters);
+    return await this._contractRepository.findByDistributor(
+      distributorId,
+      filters
+    );
   }
 
   async getContractDetail(distributorId, contractId) {
     const contract = await this._contractRepository.findById(contractId);
-    
+
     if (!contract) {
       throw new Error("Không tìm thấy contract");
     }
@@ -845,13 +1004,22 @@ export class DistributorApplicationService {
   }
 
   async getContractInfoFromBlockchain(distributorAddress, pharmacyAddress) {
-    return await this._contractBlockchainService.getContractInfoByDistributor(distributorAddress, pharmacyAddress);
+    return await this._contractBlockchainService.getContractInfoByDistributor(
+      distributorAddress,
+      pharmacyAddress
+    );
   }
 
   async getMonthlyTrends(distributorId, months = 6) {
-    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
-    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
-    const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
+    const { ManufacturerInvoiceModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
+    const { CommercialInvoiceModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
+    const { ProofOfDistributionModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js"
+    );
 
     // Validate months parameter
     const numMonths = parseInt(months);
@@ -900,7 +1068,9 @@ export class DistributorApplicationService {
     for (let i = 0; i < numMonths; i++) {
       const date = new Date();
       date.setMonth(date.getMonth() - i);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthKey = `${date.getFullYear()}-${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}`;
       monthlyData[monthKey] = {
         month: monthKey,
         year: date.getFullYear(),
@@ -915,9 +1085,11 @@ export class DistributorApplicationService {
     }
 
     // Aggregate invoices from manufacturer
-    invoicesFromManufacturer.forEach(invoice => {
+    invoicesFromManufacturer.forEach((invoice) => {
       const date = new Date(invoice.createdAt);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthKey = `${date.getFullYear()}-${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}`;
       if (monthlyData[monthKey]) {
         monthlyData[monthKey].invoicesReceived++;
         monthlyData[monthKey].invoicesReceivedQuantity += invoice.quantity || 0;
@@ -925,22 +1097,28 @@ export class DistributorApplicationService {
     });
 
     // Aggregate distributions
-    distributions.forEach(dist => {
+    distributions.forEach((dist) => {
       const date = new Date(dist.createdAt);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthKey = `${date.getFullYear()}-${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}`;
       if (monthlyData[monthKey]) {
         monthlyData[monthKey].distributions++;
-        monthlyData[monthKey].distributionsQuantity += dist.distributedQuantity || 0;
+        monthlyData[monthKey].distributionsQuantity +=
+          dist.distributedQuantity || 0;
       }
     });
 
     // Aggregate transfers to pharmacy
-    transfersToPharmacy.forEach(transfer => {
+    transfersToPharmacy.forEach((transfer) => {
       const date = new Date(transfer.createdAt);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthKey = `${date.getFullYear()}-${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}`;
       if (monthlyData[monthKey]) {
         monthlyData[monthKey].transfersToPharmacy++;
-        monthlyData[monthKey].transfersToPharmacyQuantity += transfer.quantity || 0;
+        monthlyData[monthKey].transfersToPharmacyQuantity +=
+          transfer.quantity || 0;
       }
     });
 
@@ -957,23 +1135,46 @@ export class DistributorApplicationService {
       },
       summary: {
         totalInvoicesReceived: invoicesFromManufacturer.length,
-        totalInvoicesReceivedQuantity: invoicesFromManufacturer.reduce((sum, inv) => sum + (inv.quantity || 0), 0),
+        totalInvoicesReceivedQuantity: invoicesFromManufacturer.reduce(
+          (sum, inv) => sum + (inv.quantity || 0),
+          0
+        ),
         totalDistributions: distributions.length,
-        totalDistributionsQuantity: distributions.reduce((sum, dist) => sum + (dist.distributedQuantity || 0), 0),
+        totalDistributionsQuantity: distributions.reduce(
+          (sum, dist) => sum + (dist.distributedQuantity || 0),
+          0
+        ),
         totalTransfersToPharmacy: transfersToPharmacy.length,
-        totalTransfersToPharmacyQuantity: transfersToPharmacy.reduce((sum, trans) => sum + (trans.quantity || 0), 0),
+        totalTransfersToPharmacyQuantity: transfersToPharmacy.reduce(
+          (sum, trans) => sum + (trans.quantity || 0),
+          0
+        ),
       },
       trends,
     };
   }
 
   async getDashboardStats(distributorId) {
-    const DateHelper = (await import("../../../../shared-kernel/utils/DateHelper.js")).default;
-    const StatisticsCalculationService = (await import("../../../../shared-kernel/utils/StatisticsCalculationService.js")).default;
-    const { ManufacturerInvoiceModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js");
-    const { CommercialInvoiceModel } = await import("../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js");
-    const { ProofOfDistributionModel } = await import("../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js");
-    const { NFTInfoModel } = await import("../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js");
+    const DateHelper = (
+      await import("../../../../shared-kernel/utils/DateHelper.js")
+    ).default;
+    const StatisticsCalculationService = (
+      await import(
+        "../../../../shared-kernel/utils/StatisticsCalculationService.js"
+      )
+    ).default;
+    const { ManufacturerInvoiceModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/ManufacturerInvoiceSchema.js"
+    );
+    const { CommercialInvoiceModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/CommercialInvoiceSchema.js"
+    );
+    const { ProofOfDistributionModel } = await import(
+      "../../infrastructure/persistence/mongoose/schemas/ProofOfDistributionSchema.js"
+    );
+    const { NFTInfoModel } = await import(
+      "../../../supply-chain/infrastructure/persistence/mongoose/schemas/NFTInfoSchema.js"
+    );
 
     // Get date ranges
     const { start: startOfToday } = DateHelper.getTodayRange();
@@ -981,27 +1182,35 @@ export class DistributorApplicationService {
     const { start: sevenDaysAgo } = DateHelper.getWeekRange();
 
     // === INVOICES FROM MANUFACTURER ===
-    const totalInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorId,
-    });
+    const totalInvoicesReceived = await ManufacturerInvoiceModel.countDocuments(
+      {
+        toDistributor: distributorId,
+      }
+    );
 
-    const todayInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorId,
-      createdAt: { $gte: startOfToday },
-    });
+    const todayInvoicesReceived = await ManufacturerInvoiceModel.countDocuments(
+      {
+        toDistributor: distributorId,
+        createdAt: { $gte: startOfToday },
+      }
+    );
 
-    const yesterdayInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
-      toDistributor: distributorId,
-      createdAt: { $gte: startOfYesterday, $lt: startOfToday },
-    });
+    const yesterdayInvoicesReceived =
+      await ManufacturerInvoiceModel.countDocuments({
+        toDistributor: distributorId,
+        createdAt: { $gte: startOfYesterday, $lt: startOfToday },
+      });
 
     const weekInvoicesReceived = await ManufacturerInvoiceModel.countDocuments({
       toDistributor: distributorId,
       createdAt: { $gte: sevenDaysAgo },
     });
 
-    const { diff: invoicesDiff, percentChange: invoicesPercentChange } = 
-      StatisticsCalculationService.calculateTodayYesterdayStats(todayInvoicesReceived, yesterdayInvoicesReceived);
+    const { diff: invoicesDiff, percentChange: invoicesPercentChange } =
+      StatisticsCalculationService.calculateTodayYesterdayStats(
+        todayInvoicesReceived,
+        yesterdayInvoicesReceived
+      );
 
     // Invoices by status
     const invoicesByStatus = {
@@ -1033,18 +1242,24 @@ export class DistributorApplicationService {
       createdAt: { $gte: startOfToday },
     });
 
-    const yesterdayDistributions = await ProofOfDistributionModel.countDocuments({
-      toDistributor: distributorId,
-      createdAt: { $gte: startOfYesterday, $lt: startOfToday },
-    });
+    const yesterdayDistributions =
+      await ProofOfDistributionModel.countDocuments({
+        toDistributor: distributorId,
+        createdAt: { $gte: startOfYesterday, $lt: startOfToday },
+      });
 
     const weekDistributions = await ProofOfDistributionModel.countDocuments({
       toDistributor: distributorId,
       createdAt: { $gte: sevenDaysAgo },
     });
 
-    const { diff: distributionsDiff, percentChange: distributionsPercentChange } = 
-      StatisticsCalculationService.calculateTodayYesterdayStats(todayDistributions, yesterdayDistributions);
+    const {
+      diff: distributionsDiff,
+      percentChange: distributionsPercentChange,
+    } = StatisticsCalculationService.calculateTodayYesterdayStats(
+      todayDistributions,
+      yesterdayDistributions
+    );
 
     // Distributions by status
     const distributionsByStatus = {
@@ -1067,27 +1282,35 @@ export class DistributorApplicationService {
     };
 
     // === TRANSFERS TO PHARMACY ===
-    const totalTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorId,
-    });
+    const totalTransfersToPharmacy =
+      await CommercialInvoiceModel.countDocuments({
+        fromDistributor: distributorId,
+      });
 
-    const todayTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorId,
-      createdAt: { $gte: startOfToday },
-    });
+    const todayTransfersToPharmacy =
+      await CommercialInvoiceModel.countDocuments({
+        fromDistributor: distributorId,
+        createdAt: { $gte: startOfToday },
+      });
 
-    const yesterdayTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorId,
-      createdAt: { $gte: startOfYesterday, $lt: startOfToday },
-    });
+    const yesterdayTransfersToPharmacy =
+      await CommercialInvoiceModel.countDocuments({
+        fromDistributor: distributorId,
+        createdAt: { $gte: startOfYesterday, $lt: startOfToday },
+      });
 
-    const weekTransfersToPharmacy = await CommercialInvoiceModel.countDocuments({
-      fromDistributor: distributorId,
-      createdAt: { $gte: sevenDaysAgo },
-    });
+    const weekTransfersToPharmacy = await CommercialInvoiceModel.countDocuments(
+      {
+        fromDistributor: distributorId,
+        createdAt: { $gte: sevenDaysAgo },
+      }
+    );
 
-    const { diff: transfersDiff, percentChange: transfersPercentChange } = 
-      StatisticsCalculationService.calculateTodayYesterdayStats(todayTransfersToPharmacy, yesterdayTransfersToPharmacy);
+    const { diff: transfersDiff, percentChange: transfersPercentChange } =
+      StatisticsCalculationService.calculateTodayYesterdayStats(
+        todayTransfersToPharmacy,
+        yesterdayTransfersToPharmacy
+      );
 
     // Transfers by status
     const transfersByStatus = {
@@ -1183,7 +1406,7 @@ export class DistributorApplicationService {
         },
       },
       recentActivities: {
-        recentInvoices: recentInvoices.map(inv => ({
+        recentInvoices: recentInvoices.map((inv) => ({
           id: inv._id,
           invoiceNumber: inv.invoiceNumber,
           manufacturer: inv.fromManufacturer,
@@ -1191,7 +1414,7 @@ export class DistributorApplicationService {
           status: inv.status,
           createdAt: inv.createdAt,
         })),
-        recentTransfers: recentTransfers.map(trans => ({
+        recentTransfers: recentTransfers.map((trans) => ({
           id: trans._id,
           invoiceNumber: trans.invoiceNumber,
           pharmacy: trans.toPharmacy,
@@ -1204,4 +1427,3 @@ export class DistributorApplicationService {
     };
   }
 }
-
