@@ -1174,15 +1174,65 @@ export const createDistributorRoutes = (distributorController) => {
    *             type: object
    *             required:
    *               - contractId
-   *               - transactionHash
+   *               - pharmacyAddress
    *             properties:
    *               contractId:
    *                 type: string
+   *                 description: ID của contract
+   *                 example: "507f1f77bcf86cd799439011"
+   *               pharmacyAddress:
+   *                 type: string
+   *                 description: Địa chỉ ví của pharmacy
+   *                 example: "0x70593a19a1090c30f107e757312241f3f44458d1"
+   *               tokenId:
+   *                 type: number
+   *                 description: Token ID của NFT (nếu có, sẽ ưu tiên dùng giá trị này thay vì từ blockchain)
+   *                 example: 12345
    *               transactionHash:
    *                 type: string
+   *                 description: Transaction hash từ blockchain (nếu có, sẽ ưu tiên dùng giá trị này)
+   *                 example: "0x9e2faa1b4f5931c2ba18770b635409534bce439b74383cd44a246e4c0ece06aa"
+   *               distributorPrivateKey:
+   *                 type: string
+   *                 description: Private key của distributor để ký transaction (optional)
    *     responses:
    *       200:
    *         description: Hoàn tất hợp đồng thành công
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 message:
+   *                   type: string
+   *                   example: "Contract đã được ký và NFT đã được mint thành công."
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     contractId:
+   *                       type: string
+   *                     status:
+   *                       type: string
+   *                       example: "signed"
+   *                     tokenId:
+   *                       type: number
+   *                       description: Token ID đã được lưu vào database
+   *                     blockchainTxHash:
+   *                       type: string
+   *                     distributorSignedAt:
+   *                       type: string
+   *                       format: date-time
+   *       400:
+   *         description: Lỗi validation hoặc trạng thái contract không hợp lệ
+   *       403:
+   *         description: Không có quyền truy cập
+   *       404:
+   *         description: Không tìm thấy contract
+   *       500:
+   *         description: Lỗi server
    */
   router.post("/contracts/finalize-and-mint", (req, res) =>
     distributorController.finalizeContractAndMint(req, res)

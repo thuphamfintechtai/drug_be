@@ -51,8 +51,9 @@ const DistributorPharmacyContractSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Compound index để tìm nhanh contract giữa distributor và pharmacy
-DistributorPharmacyContractSchema.index({ distributor: 1, pharmacy: 1 });
+// Compound unique index để tránh duplicate contract giữa distributor và pharmacy
+// Chỉ cho phép 1 contract active (pending, approved, signed) giữa 1 distributor và 1 pharmacy
+DistributorPharmacyContractSchema.index({ distributor: 1, pharmacy: 1 }, { unique: true });
 
 export const DistributorPharmacyContractModel =
   mongoose.models.DistributorPharmacyContract ||

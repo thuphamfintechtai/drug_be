@@ -153,6 +153,20 @@ export class DistributorPharmacyContract extends AggregateRoot {
     this._updatedAt = new Date();
   }
 
+  updateTokenId(tokenId, txHash = null) {
+    // Cho phép update tokenId và transactionHash cho contract đã signed
+    if (this._status !== ContractStatus.SIGNED) {
+      throw new Error(`Chỉ có thể update tokenId cho contract đã signed. Trạng thái hiện tại: ${this._status}`);
+    }
+    if (tokenId !== null && tokenId !== undefined) {
+      this._tokenId = tokenId;
+    }
+    if (txHash !== null && txHash !== undefined) {
+      this._blockchainTxHash = txHash;
+    }
+    this._updatedAt = new Date();
+  }
+
   reject() {
     if (this._status === ContractStatus.SIGNED) {
       throw new Error("Không thể reject contract đã được ký");
