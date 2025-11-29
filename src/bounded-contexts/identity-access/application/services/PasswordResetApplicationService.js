@@ -22,23 +22,73 @@ export class PasswordResetApplicationService {
       return { success: true, message: "Yêu cầu reset mật khẩu đã được tạo" };
     }
 
+    // Validate user.id and convert to string if needed
+    let userId = user.id;
+    if (!userId) {
+      console.error("User found but id is missing:", { email, user });
+      throw new Error("User ID không hợp lệ");
+    }
+    
+    // Ensure userId is a string
+    if (typeof userId !== 'string') {
+      userId = String(userId);
+    }
+
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + (user.roleVO.isBusinessRole() ? 24 : 1));
 
     // Delete old pending tokens
-    await this._passwordResetRepository.deletePendingByUserId(user.id);
+    await this._passwordResetRepository.deletePendingByUserId(userId);
 
-    // Create password reset request
-    const passwordResetRequest = this._passwordResetRepository.create({
-      userId: user.id,
+    // Create password reset request with validated data
+    const createData = {
+      userId: userId,
       token: resetToken,
-      expiresAt,
+      expiresAt: expiresAt,
       verificationInfo: user.roleVO.isBusinessRole() && licenseNo && taxCode
         ? { licenseNo, taxCode }
         : null,
+    };
+
+    // Log input data for debugging
+    console.log("Creating password reset request with data:", {
+      userId: createData.userId,
+      tokenLength: createData.token?.length,
+      expiresAt: createData.expiresAt,
+      hasVerificationInfo: !!createData.verificationInfo,
     });
+
+    const passwordResetRequest = this._passwordResetRepository.create(createData);
+
+    // Validate passwordResetRequest before saving
+    const missingFields = [];
+    if (!passwordResetRequest.userId) {
+      missingFields.push("userId");
+    }
+    if (!passwordResetRequest.token) {
+      missingFields.push("token");
+    }
+    if (!passwordResetRequest.expiresAt) {
+      missingFields.push("expiresAt");
+    }
+
+    if (missingFields.length > 0) {
+      console.error("Invalid passwordResetRequest - missing fields:", missingFields);
+      console.error("passwordResetRequest object:", JSON.stringify(passwordResetRequest, null, 2));
+      console.error("Input data:", {
+        userId: user.id,
+        token: resetToken,
+        expiresAt: expiresAt,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        }
+      });
+      throw new Error(`Dữ liệu password reset request không hợp lệ. Thiếu các trường: ${missingFields.join(", ")}`);
+    }
 
     await this._passwordResetRepository.save(passwordResetRequest);
 
